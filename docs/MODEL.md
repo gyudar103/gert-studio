@@ -1,1804 +1,389 @@
 # GERT Studio — Mathematical Model Specification
 
+Revision: 2026-09-11 — synchronized review edition for Version 0.1.
+
+Based on the user-edited 53-section specification supplied in this conversation. Broken equation formatting is repaired. The explicit runtime clarifications from the latest review are incorporated and identified below. Open execution questions are collected after Section 53; this document does not silently choose answers to them. Ready for architecture review, not unrestricted engine implementation.
+
 ## 1. Purpose
 
-This document defines the mathematical semantics of the GERT Studio simulation engine.
+This document is authoritative for representation, activity execution, flow items, concurrency, synchronization, stochastic outcomes, simulation, and validation. The frontend must represent these semantics. PRODUCT.md defines product goals and UX. Report contradictions before implementing affected behavior. Do not change either specification merely to make code or tests pass; semantic changes require explicit user approval.
 
-It is authoritative for:
+## 2. Core Model
 
-- model representation,
-- activity execution,
-- item/resource flow,
-- quantities,
-- parallelism,
-- synchronization,
-- stochastic outcomes,
-- simulation,
-- validation.
+Version 0.1 is a **stochastic resource-flow network with concurrent activities**:
 
-The frontend must represent this model rather than inventing separate execution semantics.
+$$M=(V,A,R),$$
 
----
+where V is the set of nodes, A the activity definitions, and R the named item types. The simulation does not occupy a single current node. Its state includes:
 
-# 2. Core Model
+$$S(t)=(I(t),X(t),Q(t)),$$
 
-Version 0.1 is a **stochastic quantified resource-flow network with concurrent activities**.
+where I is node inventory, X the running activity instances, and Q the scheduled completion events. Multiple activities may execute simultaneously.
 
-A project consists of:
+## 3. Nodes
 
-\[
-M=(V,A,R)
-\]
+Each node has `id`, `label`, and `type`. Types are `start`, `state`, and `terminal`. Nodes represent project states, item buffers, synchronization locations, or terminal project outcomes.
 
-where:
+## 4. Start Node
 
-- \(V\) is the set of nodes,
-- \(A\) is the set of activities,
-- \(R\) is the set of defined item/resource types.
+Exactly one Start exists. It contains the initial project inventory at t=0, for example one each of mechanical_request, electronics_request, and software_request. These can enable three independent activities. Incoming activity outcomes into Start are prohibited in Version 0.1.
 
-The simulation does not occupy one current node.
+## 5. State Node
 
-At time \(t\), project state is:
+A State node may accumulate multiple different items from different activities at different times. For example Integration can hold mechanical_module, electronics_module, and software_build. An activity sourced there can require all three.
 
-\[
-S(t)=\left(I(t),X(t),Q(t)\right)
-\]
+## 6. Terminal Node
 
-where:
+Terminal metadata includes `outcome_code`, `outcome_label`, and `outcome_category`. Recommended categories are `success`, `failure`, `neutral`, and `custom`. Reaching a terminal ends the realization subject to the complete simultaneous-event batch rule in Sections 25, 32, and 33. Remaining running instances are cancelled.
 
-- \(I(t)\) is the inventory of named items and quantities at every node,
-- \(X(t)\) is the set of activity instances currently running,
-- \(Q(t)\) is the future-event queue.
+## 7. Item Types
 
-This allows multiple activities to execute simultaneously.
+Items can be available, required, consumed, or produced. Examples: prototype, approval_document, test_sample, software_build. They are **flow resources**, not reusable capacity resources such as engineers or machines. Each item type has an ID and readable label.
 
----
+## 8. Item Quantity
 
-# 3. Nodes
+For node v and item r:
 
-A node represents:
+$$I_v(r,t)\geq0.$$
 
-- a project state,
-- an item/resource buffer,
-- a synchronization point,
-- an assembly/integration point,
-- or a terminal project outcome.
+Quantities may be nonnegative numeric values, not just Boolean presence. Examples: steel=50, prototype=1, approval_document=1. No sophisticated unit conversion is required. All referenced item types must be declared. Integer-only item classes, inventory caps, and numerical inventory tolerances are not defined here; see the open questions.
 
-Each node contains:
+## 9. Activity
 
-```text
-id
-name
-type
-```
+An activity definition contains `id`, `label`, `source_node`, `requirements`, `duration`, and `outcomes`. It visually lives on an edge or edge-like connection. It consumes input at one source node and, upon completion, routes production to one selected outcome target.
 
-Version 0.1 node types are:
+## 10. Activity Input Requirements
 
-```text
-start
-state
-terminal
-```
+Each activity has requirements $R_a(r)\geq0$. It is individually enabled when:
 
-A state node may simultaneously contain multiple item types and quantities.
+$$I_{source(a)}(r,t)\geq R_a(r)\quad\text{for every required }r.$$
 
-Example:
+An Integration activity requiring one mechanical module, one electronics module, and one software build cannot start until all are available at its source node. Inputs do not pool across distinct nodes.
 
-```text
-NODE: Integration Ready
+## 11. Input Consumption
 
-Inventory:
-Mechanical Module       1 unit
-Electronics Module      1 unit
-Fasteners              24 units
-Coolant                 8.5 liters
-Cable                   12 meters
-```
+Inputs are consumed atomically when an instance starts:
 
----
+$$I_{source(a)}(r,t)\leftarrow I_{source(a)}(r,t)-R_a(r).$$
 
-# 4. Start Node
+The same quantity cannot serve two instances. Read-only inputs, reusable tools, and capacity reservation/release are deferred.
 
-Exactly one Start node exists.
+## 12. Parallel Activities
 
-The Start node contains the initial project inventory at:
+Distinct activities can start at the same time when their combined requirements can be satisfied. Three Start items can independently enable Mechanical Design, Electronics Design, and Software Development at t=0. Their durations are sampled independently. Concurrent multiplicity of the **same activity definition** remains unresolved; parallelism of distinct definitions is required.
 
-\[
-t=0.
-\]
+## 13. Resource Conflicts
 
-Example:
+If individually enabled activities cannot all start together because their combined requirements exceed available consumable inventory, do not choose a winner by ID, dictionary order, queue order, or randomness.
 
-```text
-START
+Latest review clarification: report runtime status `ambiguous_resource_competition`. Static analysis may conservatively warn, but must not reject a model merely because competition is theoretically possible. Conflict detection must consider aggregate demand, not just pairwise conflicts. Requirements are node-local; enablement is evaluated globally.
 
-Steel                    500 kg
-Electronic Components     20 units
-Development Request        1 unit
-Software Specification     1 unit
-```
+An explicit probabilistic routing activity can express a modeled choice. Priorities, queues, allocation policies, and decisions are future features. Handling competition among repeated instances depends on the unresolved multiplicity rule.
 
-Initial inventory may contain any number of item types.
+## 14. Activity Duration
 
-These items may enable multiple activities simultaneously.
+Each activity has a nonnegative duration random variable $D_a$. On instance start, sample once:
 
-Incoming activity outcomes into Start are prohibited in Version 0.1.
+$$d\sim D_a,\qquad t_{finish}=t_{start}+d.$$
 
----
+Each new execution receives a fresh duration sample.
 
-# 5. State Nodes
-
-A State node may accumulate several item types from different incoming activities and at different times.
-
-Example:
-
-```text
-Node: System Integration
-
-Current inventory:
-
-Mechanical Assembly       1 unit
-Electronics Assembly      1 unit
-Software Build            1 unit
-Fasteners                 38 units
-```
-
-An activity associated with this node may require any combination of these items and quantities.
-
----
-
-# 6. Terminal Nodes
-
-A Terminal node represents a completed project outcome.
-
-It contains:
-
-```text
-outcome_code
-outcome_name
-outcome_category
-```
-
-Recommended categories:
-
-```text
-success
-failure
-neutral
-custom
-```
-
-Example:
-
-```json
-{
-  "id": "approved",
-  "type": "terminal",
-  "name": "System Accepted",
-  "outcome_code": "accepted",
-  "outcome_category": "success"
-}
-```
-
-When a simulation reaches a Terminal node, that realization ends.
-
-Activities still running are cancelled for that realization.
-
----
-
-# 7. Item Types
-
-An item type represents something that exists within the project and may be:
-
-- present at a node,
-- required by an activity,
-- consumed by an activity,
-- produced by an activity,
-- accumulated with quantities of the same type.
-
-Examples include:
-
-```text
-Steel
-Aluminum
-Fuel
-Mechanical Module
-Prototype
-Test Samples
-Approved Drawing
-Software Build
-Completed Subassembly
-Cable
-Documentation Package
-```
-
-Every item type has a stable machine identifier and a human-readable name.
-
-Conceptually:
-
-```json
-{
-  "id": "aluminum_plate",
-  "name": "Aluminum Plate",
-  "unit": "kg"
-}
-```
-
-The `id` is used internally.
-
-The `name` is displayed to the user.
-
----
-
-# 8. Item Definition
-
-Version 0.1 item definitions should contain:
-
-```text
-id
-name
-unit
-quantity_type
-description        optional
-```
-
-Example:
-
-```json
-{
-  "id": "fastener_m8",
-  "name": "M8 Fastener",
-  "unit": "units",
-  "quantity_type": "integer"
-}
-```
-
-Another example:
-
-```json
-{
-  "id": "aluminum",
-  "name": "Aluminum",
-  "unit": "kg",
-  "quantity_type": "continuous"
-}
-```
-
----
-
-# 9. Item Names
-
-Names are human-readable labels.
-
-Examples:
-
-```text
-Mechanical Assembly
-Fuel
-Engineering Drawing
-Prototype
-Approved Design
-Test Sample
-```
-
-Names need not be unique.
-
-Internal item IDs must be unique.
-
-For example:
-
-```text
-ID:   battery_pack_v2
-Name: Battery Pack
-```
-
-This allows item names to be changed without breaking saved project references.
-
----
-
-# 10. Item Units
-
-Every quantified item may have an optional unit.
-
-Examples:
-
-```text
-kg
-g
-liter
-meter
-m²
-units
-sets
-documents
-samples
-```
-
-Version 0.1 does not automatically convert units.
-
-Therefore:
-
-```text
-10 kg
-```
-
-and:
-
-```text
-10000 g
-```
-
-are not automatically recognized as equivalent.
-
-Activities using a particular item type operate using that item's defined unit.
-
-Automatic unit conversion may be introduced later.
-
----
-
-# 11. Quantity Types
-
-Version 0.1 supports two quantity modes.
-
-## Integer quantities
-
-For countable objects:
-
-```text
-Motors              3 units
-Documents           5 units
-Prototype           1 unit
-Test Samples       12 units
-```
-
-Mathematically:
-
-\[
-q\in\mathbb{Z}_{\ge0}.
-\]
-
-## Continuous quantities
-
-For divisible materials:
-
-```text
-Steel             52.4 kg
-Fuel              18.7 liters
-Cable             31.2 meters
-```
-
-Mathematically:
-
-\[
-q\in\mathbb{R}_{\ge0}.
-\]
-
-The item definition determines which quantity type applies.
-
----
-
-# 12. Inventory
-
-For node \(v\), item type \(r\), and time \(t\), define:
-
-\[
-I_v(r,t)\ge0
-\]
-
-as the available quantity of item \(r\) at node \(v\).
-
-Example:
-
-\[
-I_{\text{integration}}(\text{fasteners},t)=32.
-\]
-
-A node can simultaneously contain:
-
-\[
-I_v(r_1,t), I_v(r_2,t), \ldots, I_v(r_n,t).
-\]
-
----
-
-# 13. Quantity Aggregation
-
-Quantities of the same item type arriving at the same node are additive.
-
-If:
-
-\[
-I_v(r,t^-)=30
-\]
-
-and an activity produces:
-
-\[
-20
-\]
-
-additional units, then:
-
-\[
-I_v(r,t)=50.
-\]
-
-Example:
-
-```text
-Existing steel:        30 kg
-New steel delivered:   20 kg
-
-Inventory after event: 50 kg
-```
-
----
-
-# 14. Fungibility Assumption
-
-Version 0.1 treats quantities belonging to the same item type as **fungible**.
-
-For example:
-
-```text
-Bolt = 10 units
-```
-
-means ten interchangeable units of the defined Bolt item.
-
-The engine does not distinguish:
-
-```text
-Bolt #1
-Bolt #2
-Bolt #3
-```
-
-as separate objects.
-
-Likewise:
-
-```text
-Aluminum = 50 kg
-```
-
-is represented as one quantity.
-
-Explicit serial-numbered or individually tracked objects may be introduced in a later model version.
-
----
-
-# 15. Activities
-
-Activities are the primary executable elements.
-
-An activity \(a\) contains:
-
-```text
-id
-name
-source_node
-requirements
-duration
-outcomes
-```
-
-Activities live conceptually on edges.
-
-They transform items available at one project state into items available at later project states.
-
-Example:
-
-```text
-ASSEMBLY READY
-      │
-      │ Assemble Pump
-      │
-      ▼
-PUMP COMPLETE
-```
-
----
-
-# 16. Activity Input Requirements
-
-Each activity defines the quantities of each item required.
-
-Let:
-
-\[
-R_a(r)\ge0
-\]
-
-be the required quantity of resource \(r\).
-
-Example:
-
-```text
-Activity: Assemble Pump
-
-Requires:
-
-Pump Housing          1 unit
-Impeller              1 unit
-Bearing               2 units
-Fasteners            12 units
-Lubricant            0.25 liters
-```
-
-The activity is enabled only if all requirements are satisfied.
-
-Mathematically:
-
-\[
-I_{source(a)}(r,t)\ge R_a(r)
-\]
-
-for every required item \(r\).
-
----
-
-# 17. Integration Through Quantities
-
-Integration is modeled directly through multiple simultaneous requirements.
-
-Example:
-
-```text
-Activity: Final System Integration
-
-Requires:
-
-Mechanical Assembly       1 unit
-Electronic Assembly       1 unit
-Control Software          1 unit
-Cable                     8 meters
-Fasteners                 16 units
-```
-
-The activity remains disabled until every requirement is available.
-
-Thus:
-
-\[
-I_v(\text{Mechanical Assembly})\ge1,
-\]
-
-\[
-I_v(\text{Electronic Assembly})\ge1,
-\]
-
-\[
-I_v(\text{Control Software})\ge1,
-\]
-
-\[
-I_v(\text{Cable})\ge8,
-\]
-
-and:
-
-\[
-I_v(\text{Fasteners})\ge16.
-\]
-
-This provides AND-type synchronization naturally.
-
----
-
-# 18. Input Consumption
-
-Version 0.1 uses consumable-flow semantics.
-
-When activity \(a\) starts:
-
-\[
-I_{source(a)}(r,t)
-\leftarrow
-I_{source(a)}(r,t)-R_a(r).
-\]
-
-Example:
-
-Before:
-
-```text
-Steel = 100 kg
-```
-
-Activity requires:
-
-```text
-Steel = 30 kg
-```
-
-After activity begins:
-
-```text
-Steel = 70 kg
-```
-
-Consumption occurs when the activity starts rather than when it finishes.
-
-This ensures another activity cannot simultaneously consume the same quantity.
-
----
-
-# 19. Quantity Numerical Tolerance
-
-Continuous quantities introduce floating-point numerical issues.
-
-The engine must therefore use a quantity-comparison tolerance.
-
-For example, an activity requiring:
-
-\[
-10
-\]
-
-kg should not fail because internal arithmetic produced:
-
-\[
-9.999999999999998.
-\]
-
-A configurable numerical tolerance should be used.
-
-This tolerance must not be used to silently create materially missing resources.
-
----
-
-# 20. Parallel Activities
-
-Multiple activities execute simultaneously whenever their requirements can be satisfied without double-consuming available quantities.
-
-Example:
-
-```text
-START inventory:
-
-mechanical_request    1
-electronics_request   1
-software_request      1
-```
-
-Activities:
-
-```text
-Mechanical Design
-Electronics Design
-Software Development
-```
-
-All three may start at:
-
-\[
-t=0.
-\]
-
-Their durations are sampled independently.
-
----
-
-# 21. Shared Inventory and Competition
-
-Suppose:
-
-```text
-Steel available = 100 kg
-```
-
-Activity A requires:
-
-```text
-Steel = 60 kg
-```
-
-and Activity B requires:
-
-```text
-Steel = 60 kg.
-```
-
-Individually, both appear enabled.
-
-Together they require:
-
-\[
-120>100.
-\]
-
-Therefore they cannot both start.
-
-Version 0.1 must never resolve this accidentally according to internal iteration order.
-
-Such conflicts require an explicit selection rule.
-
-Initially, unresolved resource competition may be classified as an ambiguous model configuration.
-
-Future versions may provide:
-
-- priority,
-- user decisions,
-- stochastic selection,
-- optimization,
-- resource-allocation policies.
-
----
-
-# 22. Activity Duration
-
-Each activity has a nonnegative random duration:
-
-\[
-D_a\ge0.
-\]
-
-When an activity instance starts at time \(t_s\), sample:
-
-\[
-d\sim D_a.
-\]
-
-Its finish time is:
-
-\[
-t_f=t_s+d.
-\]
-
-Each activity execution receives a fresh duration sample.
-
----
-
-# 23. Duration Distributions
-
-Version 0.1 supports:
+## 15. Supported Duration Distributions
 
 ### Fixed
 
-\[
-D=c,\qquad c\ge0.
-\]
+$$D=c,\qquad c\geq0.$$
 
 ### Uniform
 
-\[
-D\sim U(a,b),
-\qquad 0\le a\le b.
-\]
+$$D\sim U(a,b),\qquad0\leq a\leq b.$$
 
 ### Triangular
 
-\[
-D\sim Triangular(a,m,b),
-\qquad0\le a\le m\le b.
-\]
+$$D\sim\operatorname{Triangular}(a,m,b),\qquad0\leq a\leq m\leq b.$$
 
 ### Beta-PERT
 
-Parameters:
+Minimum a, mode m, maximum b with $0\leq a\leq m\leq b$ and default shape parameter $\lambda=4$. When $a<b$:
 
-\[
-a=\text{minimum},
-\]
+$$\alpha=1+\lambda\frac{m-a}{b-a},\qquad\beta=1+\lambda\frac{b-m}{b-a},$$
 
-\[
-m=\text{most likely},
-\]
+$$Y\sim\operatorname{Beta}(\alpha,\beta),\qquad D=a+(b-a)Y.$$
 
-\[
-b=\text{maximum}.
-\]
+When $a=b$, return a deterministically. Degenerate uniform and triangular distributions with equal endpoints are also deterministic; do not pass invalid degenerate parameters to a numerical sampler. Whether lambda is exposed as a configurable model field remains an implementation proposal for review, not a requirement.
 
-With default:
+## 16. Activity Outcomes
 
-\[
-\lambda=4.
-\]
+Each activity has a nonempty set $O_a=\{o_1,\ldots,o_n\}$. An outcome contains `id`, `label`, `probability`, `target_node`, and `produced_items`. Exactly one outcome is selected per completed instance. Example: Test has PASS with probability 0.8 producing accepted_prototype, and FAIL with probability 0.2 producing failed_prototype at Rework Ready.
 
-Define:
+## 17. Outcome Probability Rule
 
-\[
-\alpha=
-1+\lambda\frac{m-a}{b-a},
-\]
+$$0\leq p(o)\leq1,\qquad\left|\sum_{o\in O_a}p(o)-1\right|\leq\epsilon,$$
 
-\[
-\beta=
-1+\lambda\frac{b-m}{b-a}.
-\]
+with recommended/default tolerance $\epsilon=10^{-9}$ from the latest review. Never silently normalize probabilities. PASS=0.70 and FAIL=0.20 is invalid. The numerical sampling convention for a sum accepted within tolerance must be documented and reviewed; validation tolerance is not permission to rewrite stored probabilities.
 
-Sample:
+## 18. Deterministic Activities
 
-\[
-Y\sim Beta(\alpha,\beta)
-\]
+A single-outcome activity has probability 1. A deterministic outcome does not imply deterministic duration; these are distinct properties.
 
-and transform:
+## 19. Why Probability Belongs to Outcomes
 
-\[
-D=a+(b-a)Y.
-\]
+Mechanical Design and Electronics Design can both execute. Their probabilities do not sum to 1. It is the alternative outcomes **within each activity** whose probabilities sum to 1. Enablement determines which activities can execute.
 
-When \(a=b\), the duration is deterministic.
+## 20. Probabilistic Routing
 
----
+A zero-duration routing activity can consume a choice token and produce a procedure-request item at one selected target, for example A with probability 0.6 or B with probability 0.4. A dedicated Chance Gateway may be a future UI feature. Zero duration does not imply zero input requirements.
 
-# 24. Activity Outcomes
+## 21. Activity Completion
 
-An activity contains one or more possible outcomes:
+For each completing instance: sample exactly one outcome, deposit its produced items at its target, and mark the instance complete. Complete the entire timestamp batch before checking terminals or enabling new starts. Terminal production occurs before classification. Duration and outcome distributions are separate; no user-defined correlation model is provided in Version 0.1.
 
-\[
-O_a=\{o_1,\ldots,o_n\}.
-\]
+## 22. Outcome Production
 
-Each outcome contains:
+For each produced item:
 
-```text
-id
-name
-probability
-target_node
-produced_items
-```
+$$I_{target(o)}(r,t)\leftarrow I_{target(o)}(r,t)+q_o(r).$$
 
-An outcome may produce multiple named items with different quantities.
+One outcome can produce several item types at its single target. Example: integrated_system=1, test_request=1, documentation=1.
 
-Example:
+## 23. Synchronization
 
-```text
-Activity: Manufacture Assembly
+Integration is enabled only when all required items have arrived at its source. For mechanical and electronics modules:
 
-Outcome: SUCCESS
-Probability: 0.90
+$$I_v(mechanical,t)\geq1\quad\text{and}\quad I_v(electronics,t)\geq1.$$
 
-Produces:
-Assembly             1 unit
-Scrap Metal          2.4 kg
-Inspection Report    1 unit
-```
+This provides AND-join behavior without a separate gateway construct. It does not introduce multi-source input consumption.
 
----
+## 24. Event-Driven Simulation
 
-# 25. Probabilistic Failure Example
+Maintain a priority queue of completion events. Time jumps to the next completion timestamp; no fixed time stepping is needed. Initialize inventory at t=0 and evaluate starts. After every full event batch, classify terminal results and otherwise reevaluate enablement globally. Do not implement this scheduling loop until the start-multiplicity and safety-boundary questions below have been resolved.
 
-Activity:
+## 25. Simultaneous Events
 
-```text
-Prototype Test
-```
+All events sharing the same timestamp form one batch. Sample their outcomes and deposit all outputs before starting new activities. Never return immediately after the first terminal event in a batch.
 
-requires:
+Latest review clarification: newly started zero-duration activities create **successive batches at the same timestamp**, not additions to the batch currently being processed. Safety limits must prevent infinite zero-time cycles. Approximate timestamp coalescing is not authorized; any proposed time tolerance must be reviewed.
 
-```text
-Prototype          1 unit
-Test Sample        3 units
-```
+## 26. Starting Enabled Activities
 
-Possible outcomes:
+Evaluate enablement globally and check combined consumable requirements before starting a conflict-free set. Consume input atomically at start. Never partially start a competing group just because one definition is processed first. Available inventory can enable distinct activities concurrently.
 
-```text
-PASS
-p = 0.80
+The previous phrase “any set” must not authorize arbitrary subset selection. Repeated-instance launch counts, retriggering with leftover inventory, and empty requirements remain open questions. Do not invent `max_concurrent_instances` or another policy field to resolve them.
 
-Produces:
-Validated Prototype    1 unit
-Test Report            1 unit
-```
+## 27. Repeated Execution
 
-or:
+A definition may execute again when new input arrives, such as Test → failed item → Rework → fresh test request → Test. Every execution is a separate instance with fresh stochastic samples. This does not by itself settle concurrent instances of the same definition.
 
-```text
-FAIL
-p = 0.20
+## 28. Activity Definition vs Activity Instance
 
-Produces:
-Failed Prototype       1 unit
-Failure Report         1 unit
-```
+A definition describes an activity. An instance is one execution and records its start, scheduled finish, sampled duration, and selected outcome when completed. Cancelled instances have not completed and must not be assigned a sampled completion outcome retrospectively. Define the exact public instance schema during architecture review.
 
-The probabilities satisfy:
+## 29. Cycles
 
-\[
-0.80+0.20=1.
-\]
+Cycles and feedback are legal. Basic test/rework cycles are a Version 0.1 acceptance requirement. Execute them using repeated instances, not by unrolling to a fixed DAG or requiring exact analytical cycle formulas.
 
----
+## 30. Simulation Safety Limits
 
-# 26. Outcome Probability Rule
+Recommended explicit settings:
 
-For every activity:
+- `max_activity_completions`
+- `max_simulation_time`
+- `max_activity_instances`
 
-\[
-0\le p(o)\le1
-\]
+Run statuses include `terminal`, `deadlock`, `cutoff_activity_count`, `cutoff_time`, `invalid_runtime_state`, `ambiguous_resource_competition`, and `ambiguous_terminal`.
 
-and:
+Report cutoffs separately from modeled outcomes. A cutoff is not proof of nontermination. Exact boundary behavior, precedence, and the status for an instance-count cutoff require review; do not silently overload a status or truncate a simultaneous batch.
 
-\[
-\sum_{o\in O_a}p(o)=1.
-\]
+## 31. Deadlock
 
-Floating-point numerical tolerance is allowed.
+A run deadlocks when no terminal has been reached, no activity is running, and no activity is enabled. For example Integration waits for B, but only A exists and nothing can produce B. Deadlock is not automatically a modeled failure terminal. Enabled conflicting activities instead produce the ambiguity status in Section 13.
 
-Probabilities must not be silently normalized.
+## 32. Project Termination
 
-For example:
+When exactly one distinct Terminal node is reached in a fully processed batch at time t:
 
-```text
-PASS = 0.7
-FAIL = 0.2
-```
+$$T_{project}=t.$$
 
-is invalid.
+Apply all batch production first, then terminate and cancel remaining running instances. Do not start downstream activities after this terminal decision. Multiple arrivals at the same terminal identify one terminal result.
 
----
+## 33. Simultaneous Terminal Outcomes
 
-# 27. Deterministic Activities
+If a batch reaches more than one distinct Terminal node, classify `ambiguous_terminal` after processing the complete batch. Do not pick one by ordering, probability, category, or label. Distinct nodes remain distinct even if their category is the same.
 
-A deterministic activity has exactly one outcome with:
+## 34. Monte Carlo Simulation
 
-\[
-p=1.
-\]
+For N realizations, initialize each with the same model inventory. Sample activity durations and completion outcomes. Use independent pseudorandom streams reproducibly derived from the request seed. A simulated run and a mathematical infinite trajectory are not the same thing when safety limits intervene.
 
-This is expected to be common.
+## 35. Reproducibility
 
-Example:
+Accept a seed and return the seed used. Reproduce results for the same model, engine version, settings, and seed to the degree supported by numerical libraries. Record versions needed to interpret this guarantee. Deterministic random-number assignment must not become an implicit resource-allocation policy. Proposed event ordering and stream derivation should be documented during review.
 
-```text
-Machine Component
+## 36. Project Completion-Time Statistics
 
-100% → Machined Component
-```
+For n terminal runs with durations $T_1,\ldots,T_n$, report sample mean, median/P50, P80, P90, P95, and observed minimum/maximum. The mean is:
 
----
+$$\overline T=\frac1n\sum_{i=1}^{n}T_i.$$
 
-# 28. Probability and Parallelism
+Label these as statistics among terminal runs observed within the limits, not unconditional project completion-time estimates. If n=0, results are unavailable, not zero. Eventually provide per-terminal results such as $E[T\mid O=k]$. Exclude cutoff, deadlock, and ambiguous run times from terminal duration samples; show their frequencies separately.
 
-Probabilities describe **alternative outcomes of one activity**.
+## 37. Outcome Probability
 
-They do not describe whether otherwise independent parallel activities execute.
+$$\widehat P_k=\frac{\#\{\text{runs terminating at }k\}}{N}.$$
 
-For example:
+Report terminal outcomes, deadlocks, safety cutoffs, ambiguous results, and invalid runtime states separately with counts and denominators. Do not renormalize terminal outcomes after dropping other statuses. These estimates describe observed terminal outcomes under configured limits.
 
-```text
-START
- ├── Mechanical Design
- ├── Electronics Design
- └── Software Development
-```
+## 38. Activity Execution Statistics
 
-all three may execute concurrently.
+If $X_i(a)$ is the execution count for activity a in realization i:
 
-There is no requirement that their execution probabilities sum to 1.
+$$\widehat E[X(a)]=\frac1N\sum_{i=1}^{N}X_i(a),$$
 
-If `Mechanical Design` itself has outcomes:
+$$\widehat P(X(a)\geq1)=\frac1N\sum_{i=1}^{N}\mathbf1\{X_i(a)\geq1\}.$$
 
-```text
-SUCCESS = 0.9
-FAILURE = 0.1
-```
+Probability of at least two executions is useful for loops. Started versus completed counting and treatment of cancellation must be settled explicitly before exposing a single field called “executions.” Counts from cutoff runs are truncated observations; label them accordingly.
 
-then:
+## 39. Activity Timing Statistics
 
-\[
-0.9+0.1=1.
-\]
+Future aggregates include first-start and first-finish means and percentiles, with sample counts and conditioning on occurrence. These help identify synchronization bottlenecks.
 
----
+## 40. Item Arrival Statistics
 
-# 29. Probabilistic Routing
+Optionally record the first time $A_{v,r}$ an item becomes available at a node. Future metrics include arrival probability and conditional mean, median, P80, and P90 arrival times. The precise handling of initial inventory and immediate consumption should be documented before these metrics are implemented.
 
-Alternative procedures may initially be represented using a routing activity.
+## 41. Costs
 
-Example:
+Costs are not required in Version 0.1. Future activity-instance costs may be accumulated into project cost. No Version 0.1 behavior depends on cost fields, distributions, or statistics.
 
-```text
-Select Supplier
-Duration = 0
+## 42. Capacity Resources
 
-Supplier A    p = 0.60
-Supplier B    p = 0.30
-Supplier C    p = 0.10
-```
+Engineers, machines, laboratories, and limited-capacity facilities are outside Version 0.1. Future resources reserved during execution and released at completion differ from the consumable items defined here.
 
-with:
+## 43. Exact Mathematical Analysis
 
-\[
-0.60+0.30+0.10=1.
-\]
+Concurrency, synchronization, inventories, running instances, arbitrary duration distributions, and cycles make a simple absorbing Markov chain over graph nodes invalid for the general model. The stochastic state must represent the full execution state. Monte Carlo is the primary general-purpose solver; restricted exact or semi-exact solvers may be added later.
 
-A dedicated graphical Chance Gateway may be introduced later.
+## 44. Relationship to Petri Nets
 
----
+Nodes holding items, activities consuming and producing them, concurrency, and input-based synchronization resemble Petri nets and stochastic activity networks. This observation does not import additional firing policies or semantics. Ordinary users need not see this terminology.
 
-# 30. Activity Completion
+## 45. Model Validation
 
-When activity \(a\) completes:
+Require unique node, activity, and item-type IDs; exactly one Start; valid initial items; existing sources and targets; declared item references; at least one outcome per activity; finite probabilities in [0,1] summing to 1 within tolerance; valid finite duration parameters; finite nonnegative quantities; no outgoing Terminal activities; and no incoming outcomes into Start. Reject NaN and infinities, which cannot represent valid finite inventory or scheduled durations in this model.
 
-1. exactly one outcome is sampled;
-2. that outcome's probability determines selection;
-3. all quantities produced by that outcome are deposited at its target node;
-4. the activity instance becomes complete;
-5. all newly enabled activities are reevaluated.
+Outcome-ID uniqueness scope and terminal-code uniqueness are schema questions to resolve during review. Zero requirements are currently allowed by the inequalities, but their execution consequences are unresolved; do not silently introduce a nonempty-requirement constraint.
 
----
+## 46. Additional Validation Warnings
 
-# 31. Outcome Production
+Warn conservatively about unreachable nodes/terminals, apparently unavailable or unused items, apparently impossible enablement, possible deadlocks, cycles, unlimited item generation, competing consumption, and ambiguous terminal configurations. A graph path alone does not prove item-level reachability. A possible conflict is not automatically a structural error.
 
-Let:
+## 47. Canonical JSON Structure
 
-\[
-q_o(r)\ge0
-\]
-
-be the quantity of item \(r\) produced by outcome \(o\).
-
-Then:
-
-\[
-I_{target(o)}(r,t)
-\leftarrow
-I_{target(o)}(r,t)+q_o(r).
-\]
-
-Example:
-
-```text
-Produces:
-
-Finished Assembly     3 units
-Waste                  4.7 kg
-Documentation          1 unit
-```
-
-Each produced quantity must conform to the item's quantity type.
-
----
-
-# 32. Production Yield
-
-Quantity-based outputs make production yield naturally representable.
-
-For example:
-
-```text
-Activity: Produce Components
-
-Input:
-Raw Material = 100 kg
-
-Outcome GOOD YIELD
-p = 0.85
-Produces:
-Component = 95 units
-
-Outcome LOW YIELD
-p = 0.15
-Produces:
-Component = 70 units
-```
-
-This provides a simple Version 0.1 method for modeling uncertain yield.
-
-A future version may allow the produced quantity itself to be a random variable.
-
----
-
-# 33. Synchronization
-
-Synchronization occurs through item requirements.
-
-For example:
-
-```text
-Mechanical Module ─────┐
-                       │
-Electronics Module ─────┼──► Integration Activity
-                       │
-Software Build ─────────┘
-```
-
-Integration begins only when the required quantities of all three are present.
-
-No separate AND-join object is mathematically necessary.
-
----
-
-# 34. Event-Driven Simulation
-
-Version 0.1 uses discrete-event simulation.
-
-The engine maintains a priority queue of future activity-completion events.
-
-Simulation time jumps directly between events.
-
-Example:
-
-```text
-t=0
-Mechanical starts
-Electronics starts
-Software starts
-
-t=4.1
-Mechanical finishes
-Mechanical Module += 1
-
-t=5.8
-Software finishes
-Software Build += 1
-
-t=7.3
-Electronics finishes
-Electronics Module += 1
-
-Integration requirements now satisfied.
-Integration starts at t=7.3.
-```
-
----
-
-# 35. Simultaneous Events
-
-All activity completions with the same simulation timestamp are processed as one batch.
-
-Their produced quantities are deposited before new activities are enabled.
-
-This ensures behavior is not determined by arbitrary queue ordering.
-
----
-
-# 36. Starting Enabled Activities
-
-After every event batch:
-
-1. inventories are updated,
-2. activity requirements are evaluated,
-3. mutually compatible enabled activities may start,
-4. their input quantities are consumed/reserved,
-5. duration samples are drawn,
-6. completion events are scheduled.
-
-The same physical quantity must never be allocated to two simultaneous activity instances.
-
----
-
-# 37. Activity Definition and Activity Instance
-
-An activity definition is part of the model.
-
-An activity instance is one execution of that definition.
-
-Example:
-
-```text
-Prototype Test
-    execution #1
-
-Prototype Test
-    execution #2
-
-Prototype Test
-    execution #3
-```
-
-Each instance records:
-
-```text
-instance_id
-activity_id
-start_time
-finish_time
-sampled_duration
-consumed_items
-selected_outcome
-produced_items
-status
-```
-
-This distinction is essential for cycles and repeated batch production.
-
----
-
-# 38. Multiple Activity Instances
-
-An activity may potentially execute multiple times when sufficient new inputs are available.
-
-For example:
-
-```text
-Raw Material = 300 kg
-```
-
-If:
-
-```text
-Manufacturing Activity
-requires 100 kg
-```
-
-the model may support three executions.
-
-Whether multiple instances of the **same activity definition** may run concurrently must be explicitly configured.
-
-Recommended Version 0.1 field:
-
-```text
-max_concurrent_instances
-```
-
-Default:
-
-```text
-1
-```
-
-This prevents accidental unlimited parallel execution.
-
----
-
-# 39. Cycles
-
-Cycles are allowed by the canonical model.
-
-Example:
-
-```text
-TEST
- │
- ├── PASS ─────► SUCCESS
- │
- └── FAIL ─────► REWORK
-                    │
-                    ▼
-                TEST READY
-                    │
-                    └────► TEST
-```
-
-Fresh items generated by Rework can enable a new Test activity instance.
-
-Monte Carlo simulation should support this.
-
-Exact analytical cycle analysis is not required in Version 0.1.
-
----
-
-# 40. Simulation Safety Limits
-
-Because quantities and cycles can potentially create unlimited execution, the simulation engine must support:
-
-```text
-max_activity_completions
-max_activity_instances
-max_simulation_time
-max_inventory_quantity
-```
-
-Possible run statuses include:
-
-```text
-terminal
-deadlock
-cutoff_activity_count
-cutoff_time
-cutoff_inventory
-invalid_runtime_state
-ambiguous_terminal
-```
-
----
-
-# 41. Deadlock
-
-A deadlock occurs when:
-
-- no Terminal node has been reached,
-- no activity is running,
-- no activity is enabled.
-
-For example:
-
-```text
-Integration requires:
-
-Module A = 1
-Module B = 1
-
-Module A available = 1
-Module B available = 0
-
-No remaining activity can produce Module B.
-```
-
-This is a deadlock.
-
-It must be reported separately from a modeled failure outcome.
-
----
-
-# 42. Project Termination
-
-A realization terminates when an activity outcome targets a Terminal node.
-
-At that time:
-
-\[
-T_{\text{project}}=t.
-\]
-
-Remaining running activities are cancelled.
-
-The terminal node determines the project outcome.
-
----
-
-# 43. Monte Carlo Simulation
-
-For \(N\) realizations:
-
-\[
-R=\{r_1,\ldots,r_N\},
-\]
-
-each realization starts with the same model-defined initial inventory.
-
-Random variables include:
-
-- activity duration,
-- activity outcome.
-
-Future versions may also support:
-
-- stochastic production quantity,
-- stochastic consumption quantity,
-- stochastic initial inventory.
-
----
-
-# 44. Reproducibility
-
-Every simulation accepts a random seed.
-
-Given the same:
-
-- model,
-- engine version,
-- settings,
-- seed,
-
-the result should be reproducible to the degree supported by the numerical libraries.
-
-The seed must be included with saved simulation results.
-
----
-
-# 45. Completion-Time Statistics
-
-At minimum:
-
-\[
-E[T],
-\]
-
-median,
-
-\[
-P50,
-\]
-
-\[
-P80,
-\]
-
-\[
-P90,
-\]
-
-\[
-P95.
-\]
-
-These should eventually also be calculated conditional on terminal outcome.
-
----
-
-# 46. Outcome Statistics
-
-For terminal outcome \(k\):
-
-\[
-\hat P_k=
-\frac{\text{runs terminating at }k}{N}.
-\]
-
-The report must separately include probabilities of:
-
-- modeled terminal outcomes,
-- deadlock,
-- safety cutoff,
-- ambiguous runtime conditions.
-
----
-
-# 47. Activity Statistics
-
-For activity \(a\), calculate:
-
-- probability executed at least once,
-- expected number of executions,
-- probability of repeated execution,
-- mean first start time,
-- mean first finish time,
-- start-time quantiles,
-- finish-time quantiles.
-
----
-
-# 48. Inventory and Item Statistics
-
-Quantity-based modeling enables additional useful metrics.
-
-For each node/item pair, the engine may calculate:
-
-- probability item ever arrives,
-- first-arrival time,
-- maximum inventory observed,
-- quantity at project termination,
-- expected quantity at selected milestones.
-
-For example:
-
-```text
-Integration Node
-Mechanical Modules
-
-P(arrives)          96.8%
-Mean first arrival   5.4 days
-Mean final quantity  1.13
-```
-
----
-
-# 49. Costs
-
-Cost is explicitly optional and not required for Version 0.1.
-
-The architecture should allow a future activity-instance cost variable:
-
-\[
-C_a.
-\]
-
-Costs must not complicate the first implementation of quantified resource flow.
-
----
-
-# 50. Capacity Resources
-
-Version 0.1 item quantities describe **flow resources**, not capacity resources.
-
-For example:
-
-```text
-Steel = 100 kg
-Motor = 3 units
-Prototype = 1 unit
-```
-
-are Version 0.1 items.
-
-By contrast:
-
-```text
-Engineers = 5
-CNC machines = 2
-Laboratory capacity = 1
-```
-
-represent reusable capacity resources and are deferred.
-
-Capacity resources will eventually be reserved during activity execution and returned afterward.
-
----
-
-# 51. Exact Analysis
-
-Because Version 0.1 supports:
-
-- parallel execution,
-- synchronization,
-- quantified inventories,
-- stochastic durations,
-- probabilistic outcomes,
-- and potentially cycles,
-
-the general model is not reducible to a simple Markov chain over visible graph nodes.
-
-The full state is:
-
-\[
-S(t)=
-(\text{inventories},
-\text{running activities},
-\text{event queue}).
-\]
-
-Monte Carlo simulation is therefore the primary Version 0.1 solution method.
-
-Exact analytical solvers may later support restricted subclasses.
-
----
-
-# 52. Relationship to Petri Nets
-
-The model has similarities to stochastic Petri nets and stochastic activity networks:
-
-- nodes hold quantities/tokens,
-- activities consume inputs,
-- activities produce outputs,
-- activities can execute concurrently,
-- multiple outputs can synchronize later.
-
-GERT Studio should not require users to understand Petri-net terminology.
-
-These concepts are primarily useful for designing a mathematically robust engine.
-
----
-
-# 53. Validation
-
-A model is structurally valid only if:
-
-1. node IDs are unique;
-2. activity IDs are unique;
-3. item IDs are unique;
-4. exactly one Start node exists;
-5. initial quantities are valid;
-6. all referenced item types exist;
-7. source and target nodes exist;
-8. every activity has at least one outcome;
-9. every outcome probability is in \([0,1]\);
-10. each activity's outcome probabilities sum to 1 within tolerance;
-11. all duration distributions are valid;
-12. all required quantities are nonnegative;
-13. all produced quantities are nonnegative;
-14. integer items use integer quantities;
-15. continuous items use valid finite numeric quantities;
-16. terminal nodes have no outgoing activities;
-17. incoming outcomes into Start are prohibited.
-
----
-
-# 54. Validation Warnings
-
-The engine should attempt to detect:
-
-- unreachable nodes,
-- unreachable terminal outcomes,
-- undefined items,
-- items that can apparently never be produced,
-- items produced but never consumed,
-- activities that can apparently never execute,
-- competing consumption,
-- possible deadlocks,
-- cycles,
-- possible unlimited item generation,
-- possible unlimited activity execution,
-- ambiguous terminal behavior.
-
-Warnings may be conservative.
-
----
-
-# 55. Canonical Item JSON
-
-Example countable item:
+The following is an illustrative structure, not a runnable acceptance fixture. All referenced items are declared, correcting the incomplete earlier example. Activity and duration examples below use the same vocabulary.
 
 ```json
 {
-  "id": "motor",
-  "name": "Electric Motor",
-  "unit": "units",
-  "quantity_type": "integer"
+  "schema_version": "0.1",
+  "project": {"id": "example", "name": "Example Project"},
+  "item_types": [
+    {"id": "mechanical_request", "label": "Mechanical Request"},
+    {"id": "mechanical_module", "label": "Mechanical Module"}
+  ],
+  "nodes": [
+    {"id": "start", "type": "start", "label": "Start", "initial_inventory": {"mechanical_request": 1}},
+    {"id": "integration", "type": "state", "label": "Integration"},
+    {"id": "success", "type": "terminal", "label": "Success", "outcome_code": "success", "outcome_label": "Success", "outcome_category": "success"}
+  ],
+  "activities": []
 }
 ```
 
-Example continuous item:
+The exact versioned schema and location of simulation-request settings should be proposed during architecture review; do not add semantic fields without a supporting rule.
+
+## 48. Example Activity
 
 ```json
 {
-  "id": "steel",
-  "name": "Structural Steel",
-  "unit": "kg",
-  "quantity_type": "continuous"
-}
-```
-
----
-
-# 56. Canonical Start Inventory
-
-```json
-{
-  "initial_inventory": {
-    "steel": 500.0,
-    "motor": 3,
-    "development_request": 1
-  }
-}
-```
-
----
-
-# 57. Canonical Activity Example
-
-```json
-{
-  "id": "build_frame",
-  "name": "Build Frame",
-  "source_node": "fabrication_ready",
-
-  "requirements": {
-    "steel": 80.0,
-    "fastener": 24
-  },
-
-  "duration": {
-    "type": "triangular",
-    "min": 2,
-    "mode": 4,
-    "max": 7
-  },
-
-  "max_concurrent_instances": 1,
-
+  "id": "mechanical_design",
+  "label": "Mechanical Design",
+  "source_node": "start",
+  "requirements": {"mechanical_request": 1},
+  "duration": {"type": "triangular", "min": 2, "mode": 4, "max": 7},
   "outcomes": [
     {
       "id": "complete",
-      "name": "Complete",
+      "label": "Complete",
       "probability": 1.0,
-      "target_node": "assembly",
-      "produced_items": {
-        "frame": 1
-      }
+      "target_node": "integration",
+      "produced_items": {"mechanical_module": 1}
     }
   ]
 }
 ```
 
----
+This is an activity fragment. Inserting it in Section 47 still does not provide a complete workflow to Success.
 
-# 58. Version 0.1 Acceptance Test — Quantities
+## 49. Example Parallel Integration Model
 
-Initial inventory:
+Start holds one request each for Mechanical Design, Electronics Design, and Software Development. All three start at t=0 and deliver mechanical_module, electronics_module, and software_build to Integration. Integration requires one of each. With no other constraints:
 
-```text
-Steel = 100 kg
-Fasteners = 20 units
-```
+$$t_{integration,start}=\max(t_M,t_E,t_S).$$
 
-Activity A requires:
+For deterministic durations 3, 5, and 8, Integration starts at t=8. With integration duration d and a terminal outcome, the project finishes at 8+d. This is a mandatory regression test.
 
-```text
-Steel = 30 kg
-Fasteners = 4 units
-```
+## 50. Example Probabilistic Activity
 
-After Activity A starts, inventory must equal:
+Test consumes one prototype, has triangular duration with minimum 1, mode 2, maximum 4, and PASS/FAIL probabilities 0.8/0.2. Their sum must validate as 1. Empirical frequencies should agree with the configured probabilities within statistically justified Monte Carlo uncertainty.
 
-```text
-Steel = 70 kg
-Fasteners = 16 units
-```
+## 51. Example Rework Cycle
 
-If Activity A produces:
+A Test at Test Ready consumes a prototype. PASS (0.8) reaches Success; FAIL (0.2) deposits failed_prototype at Rework Ready. Rework consumes that item and returns a fresh prototype to Test Ready. An initial activity from Start supplies the first prototype, because routing back into Start is prohibited. Repeated tests use fresh samples. Safety limits bound pathological runs.
 
-```text
-Assembly = 2 units
-Scrap = 3.5 kg
-```
+## 52. Version 0.1 Acceptance Tests
 
-those quantities must appear exactly at its target node when the activity finishes.
+1. Deterministic linear workflow: known finish time is exact.
+2. Parallel workflow: durations 3, 5, and 8 enable Integration exactly at t=8.
+3. Stochastic duration: sampled statistics match each supported distribution with justified tolerances; include degenerate cases.
+4. Probabilistic outcomes: empirical 0.8/0.2 frequencies are statistically consistent.
+5. Invalid probabilities: 0.7/0.2 is rejected; test boundaries and tolerance without normalization.
+6. Synchronization: an activity requiring A, B, and C remains disabled until all exist.
+7. Simultaneous completion: all batch production precedes new starts.
+8. Deadlock: an unsatisfiable workflow with no running/enabled activity reports deadlock.
+9. Seed reproducibility: identical model, version, settings, and seed reproduce results.
+10. Basic cycle: Test/Rework/Test repeats correctly and respects limits.
+11. Competition: actual aggregate inventory conflict reports `ambiguous_resource_competition`; theoretical competition alone is a warning.
+12. Terminals: two distinct terminals in one batch report `ambiguous_terminal`; repeated arrivals at one terminal do not.
+13. Terminal production: apply output before terminal classification; cancel remaining running instances without marking them completed.
+14. Zero-duration chains: successive same-time batches work, and zero-time cycles meet safety limits.
+15. Quantities: input consumption and output accumulation are correct and never double-spend inventory.
+16. Reporting: statuses account for all realizations; nonterminal times are not included in terminal duration statistics; zero terminal samples produce unavailable metrics.
 
----
+Add multiplicity, cutoff-boundary, and count-convention tests after the associated semantic decisions are approved. These tests must verify the specification, not freeze an arbitrary implementation assumption.
 
-# 59. Version 0.1 Acceptance Test — Aggregation
+## 53. Fundamental Version 0.1 Principles
 
-Two parallel activities both produce material at the same node.
+- Activities execute; nodes hold items and state.
+- Distinct activities may execute simultaneously.
+- Activities start only when their required quantities exist.
+- Inputs are consumed at start; selected outcomes produce outputs at completion.
+- Probabilities sum to 1 within each activity's outcomes and are never silently normalized.
+- Synchronization follows from input requirements.
+- Process full simultaneous-event batches before enabling activities or choosing a terminal result.
+- Report unresolved resource competition and simultaneous distinct terminals explicitly.
+- Monte Carlo is the general Version 0.1 solver.
+- Cycles are legal and basic cycle execution is required.
+- Costs and capacity scheduling are deferred.
 
-Activity A produces:
+## Open Questions — Review Before Affected Implementation
 
-```text
-Material X = 25 kg
-```
+These are unresolved semantics, not an invitation to invent defaults:
 
-Activity B produces:
+1. **Same-definition concurrency and multiplicity:** If inventory supports several executions, how many start now? Can one definition overlap itself? What retriggers it when leftover inventory remains? No `max_concurrent_instances` field is approved.
+2. **Empty/all-zero requirements:** Such an activity is always enabled under the current inequalities. Is it prohibited, one-shot, externally triggered, or governed by another explicit rule? Safety limits alone do not define the intended firing policy.
+3. **Quantity arithmetic:** Numeric quantities are allowed. Choose and approve exact/decimal/floating representation and any comparison tolerance or tiny-negative handling; do not silently round quantities or invent integer/continuous item types.
+4. **Safety boundaries and precedence:** Define inclusive/exclusive time horizons, completion/instance limits at simultaneous batches, precedence when a terminal coincides with a limit, and the instance-limit status. Preserve complete-batch terminal semantics.
+5. **Probability tolerance sampling:** Specify how accepted sums differing from 1 by at most epsilon are sampled without silently modifying or normalizing the model.
+6. **Execution counters:** Define started, completed, and cancelled counts and which feeds the displayed execution metric, including cutoff runs.
+7. **Schema identity rules:** Decide outcome-ID uniqueness scope, terminal-code uniqueness, duration field names, and simulation settings placement. These choices must support the stated semantics.
+8. **Random stream assignment:** Document how draws are assigned to instances and batch events reproducibly, including behavior under reordered serialized elements. No random policy may resolve a resource conflict.
 
-```text
-Material X = 40 kg
-```
-
-After both complete:
-
-\[
-I(Material X)=65\text{ kg}.
-\]
-
----
-
-# 60. Version 0.1 Acceptance Test — Quantity Synchronization
-
-Integration requires:
-
-```text
-Component A = 2 units
-Component B = 3 units
-Material C = 10 kg
-```
-
-Inventory initially contains:
-
-```text
-Component A = 2
-Component B = 2
-Material C = 15 kg
-```
-
-Integration must remain disabled.
-
-When one additional Component B arrives:
-
-```text
-Component B = 3
-```
-
-Integration becomes enabled.
-
----
-
-# 61. Fundamental Version 0.1 Principles
-
-\[
-\boxed{\text{Activities execute; nodes hold named items and quantities.}}
-\]
-
-\[
-\boxed{\text{Item quantities may be integer or continuous.}}
-\]
-
-\[
-\boxed{\text{Same-type quantities at a node are additive and fungible.}}
-\]
-
-\[
-\boxed{\text{Several activities may execute simultaneously.}}
-\]
-
-\[
-\boxed{\text{Activities start only when all required quantities exist.}}
-\]
-
-\[
-\boxed{\text{Consumed quantities are removed when an activity starts.}}
-\]
-
-\[
-\boxed{\text{Activity outcomes produce named items and quantities.}}
-\]
-
-\[
-\boxed{\sum_{\text{outcomes of activity}}p_i=1.}
-\]
-
-\[
-\boxed{\text{Monte Carlo is the general Version 0.1 solver.}}
-\]
-
-\[
-\boxed{\text{The architecture supports cycles and repeated activity instances.}}
-\]
-
-These semantics must not be changed implicitly by the frontend or implementation.
+Current next step: Antigravity reads both files and returns its interpretation, architecture (including examples and architecture/roadmap documents), contradictions, unresolved questions, and correctness test plan. It must not implement the mathematical engine or modify these specifications during this review-only step.
