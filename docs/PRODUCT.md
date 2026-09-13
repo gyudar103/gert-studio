@@ -1,899 +1,191 @@
 # GERT Studio — Product Specification
 
+Revision: 2026-09-14 — synchronized specification for Version 0.1.
+
+Version 0.1 uses the concurrent resource-flow model defined in MODEL.md. Costs and capacity scheduling remain future features.
+
 ## 1. Product Name
 
-**Working name:** GERT Studio
+**Working name: GERT Studio.** A standalone application for visually modeling, simulating, and analyzing stochastic project and process networks using GERT concepts. It supports uncertain durations, alternative outcomes, parallel work, synchronization, quantified named flow items, repeated activities, feedback and rework loops, and terminal project outcomes. Analytical methods and cost analysis may be added later.
 
-GERT Studio is a standalone application for visually modeling, simulating, and analyzing stochastic projects and processes containing:
+## 2. Product Vision
 
-- parallel activities,
-- uncertain activity durations,
-- probabilistic outcomes,
-- multiple possible project outcomes,
-- synchronization and integration,
-- materials, items, and intermediate deliverables,
-- and eventually rework loops and repeated activities.
+Draw a project as it actually behaves—including uncertainty, parallel work, integration, failure, and rework—and understand what can happen, its probability, its duration, and the sources of risk. Cost analysis is a future extension of this vision.
 
-The application extends PERT/GERT concepts into a practical visual stochastic workflow environment.
+Examples include prototype/test/redesign loops, rejected approvals and resubmission, alternative suppliers, recovery procedures, and integration of separately developed components. Loops are first-class constructs.
 
----
+## 3. Primary Product Goals
 
-# 2. Product Vision
+Users should be able to:
 
-The central product idea is:
+1. Visually construct stochastic project networks.
+2. Define named items and quantities held at nodes.
+3. Define activities with consumable input requirements and uncertain durations.
+4. Assign probabilities to alternative **outcomes of each activity**.
+5. Model concurrent execution, integration, repeated execution, and cycles.
+6. Define multiple terminal outcomes.
+7. Validate models and run reproducible Monte Carlo simulations.
+8. Estimate terminal probabilities, completion-time distributions, and activity execution counts.
+9. Inspect modeled outcomes separately from deadlocks, ambiguities, and cutoffs.
+10. Save, load, export, and reuse complete models.
+11. Eventually compare scenarios, identify sensitivities, and analyze costs.
 
-> Draw a project as a network of activities that consume and produce project items, allow activities to execute in parallel, represent uncertain outcomes explicitly, and immediately understand the probability and timing of the possible project results.
+## 4. Non-Goals for Initial Versions
 
-Traditional PERT and CPM primarily model precedence:
+Version 0.1 does not require costs, employee or machine capacity scheduling, resource leveling, calendars, procurement, collaboration, permissions, enterprise authentication, ERP integration, portfolio optimization, or live multi-user editing. It is not initially a replacement for Microsoft Project, Primavera, Jira, accounting software, or a general-purpose simulation platform.
 
-```text
-Activity A
-    ↓
-Activity B
-    ↓
-Activity C
-```
+Named consumable flow items **are required** in Version 0.1; they must not be confused with deferred reusable capacity resources.
 
-Real projects frequently behave more like:
+## 5. Target Users
 
-```text
-                    ┌──► Mechanical Design ──┐
-START ──────────────┤                        ├──► Integration
-                    └──► Electronics Design ─┘
-```
+Project managers, engineers, R&D and product teams, researchers, systems engineers, risk analysts, infrastructure and aerospace planners, pharmaceutical development teams, operations researchers, and educators. Normal use must not require knowledge of Markov chains or Petri nets. Advanced users should be able to inspect assumptions.
 
-while also containing uncertainty:
+## 6. Core User Experience
 
-```text
-Integration
-     │
-     ▼
-    Test
-   /    \
- 80%    20%
- /        \
-PASS     REWORK
-```
+### 6.1 Network Canvas
 
-GERT Studio should model both aspects in the same system.
+An interactive graph supports creating, moving, connecting, inspecting, and deleting nodes and activities; zooming and panning; and displaying outcome branches and loops. Activities visually live on edge-like connections. A multi-outcome activity remains one activity with several outcome connections, not several independent executions.
 
----
+Nodes hold items. Activities consume requirements at a source node and produce items at an outcome target. Several activities may run simultaneously. The graph must never be assumed to be a DAG.
 
-# 3. Core Modeling Concept
+### 6.2 Properties Panel
 
-The model has three primary concepts:
+- Node: ID, label, type, initial inventory for Start, and terminal metadata where applicable.
+- Item type: ID and readable name.
+- Activity: ID, label, source, named input quantities, duration distribution and parameters.
+- Outcome: ID, label, probability, target, produced item quantities.
 
-1. **Nodes**
-2. **Activities**
-3. **Items / resources**
+Probabilities belong to outcomes within an activity, not to the set of activities leaving a node. Cost, capacity-resource, conditional, and correlation controls are future features.
 
-## 3.1 Nodes represent project states and resource locations
+### 6.3 Analysis Panel
 
-A node can contain one or more items produced by completed activities.
+Show outcome probabilities; deadlock, ambiguity, and cutoff frequencies; terminal completion-time distributions; and activity execution statistics. Show sample sizes and conditioning explicitly. Never label a cutoff as proven nontermination or a simulated deadlock as a modeled failure terminal.
 
-For example:
+## 7. Core Modeling Philosophy and Authority
 
-```text
-INTEGRATION READY
+The serializable mathematical model is independent of the engine and interface. The engine validates and simulates it; the UI constructs and displays it.
 
-Mechanical Assembly       ✓
-Electronics Assembly      ✓
-Control Software          ✓
-```
+`MODEL.md` is authoritative for mathematical and simulation semantics. `PRODUCT.md` is authoritative for product goals, UX, and scope. Report contradictions before implementing affected behavior; do not silently resolve them. Do not modify either specification merely to make code or tests pass. Semantic changes require explicit user approval.
 
-The next activity can require all three.
+## 8. Version 0.1 Scope
 
-This makes nodes useful as:
+### 8.1 Nodes and Items
 
-- synchronization points,
-- inventories of completed items,
-- project states,
-- integration points,
-- readiness states.
+Exactly one Start; State nodes; Terminal nodes with success, failure, neutral, or custom metadata. Nodes hold multiple named flow items with nonnegative numeric quantities. No sophisticated unit conversion.
 
-## 3.2 Activities live on edges
+### 8.2 Activities and Outcomes
 
-Activities transform project state.
+An activity has a single source, consumable requirements, duration, and one or more probabilistic outcomes. Each outcome has a target and produced items. Requirements implement synchronization. Repeated executions are distinct activity instances.
 
-An activity:
+### 8.3 Duration Distributions
 
-- requires one or more input items,
-- takes time,
-- may have uncertain duration,
-- produces one or more output items,
-- may have several probabilistic outcomes.
+Fixed, uniform, triangular, and beta-PERT. Parameter definitions and validity are in MODEL.md.
 
-Activities are visually represented as edges or edge-like objects between nodes.
+### 8.4 Costs
 
-## 3.3 Items flow through the project
+Not required for Version 0.1. No Version 0.1 behavior or acceptance gate depends on cost fields, distributions, or metrics.
 
-Items can represent:
+### 8.5 Structural Features
 
-- materials,
-- components,
-- documents,
-- approvals,
-- completed designs,
-- prototypes,
-- test results,
-- software modules,
-- intermediate products,
-- activation tokens.
+Linear workflows, parallel work, synchronization, probabilistic outcomes, multiple terminals, and basic rework cycles. The canonical representation and architecture must support cycles. Any staged implementation limitation must be stated explicitly, not implemented by silently converting the graph to a DAG.
 
-For Version 0.1, these are **flow resources**.
+### 8.6 Simulation
 
-Capacity resources such as:
+Discrete-event Monte Carlo with configurable realization count (for example 1,000, 10,000, or 100,000), reproducible seeds, and safety limits. These counts are user options, not performance guarantees.
 
-- engineers,
-- machines,
-- laboratories,
-- production lines,
+### 8.7 Initial Metrics
 
-are a future feature.
+- Counts and probabilities of each terminal outcome, deadlocks, ambiguities, and cutoffs, using all requested realizations N as the denominator.
+- Mean, median/P50, P80, P90, P95, and observed minimum/maximum duration among terminal runs, labeled as conditional on reaching a terminal within the run limits.
+- Mean activity execution count and probability of at least one execution, with the precise counting convention resolved in MODEL.md.
+- Sample sizes and cutoff information alongside statistics; no misleading unconditional completion-time claim.
 
----
+Per-terminal conditional duration statistics are an important extension, followed by activity timing and item-arrival metrics. No Phase 1 cost metrics are required.
 
-# 4. Example: Parallel Development and Integration
+## 9. Graph Validation
 
-A project might contain:
+Messages have error, warning, or informational severity and explain the problem in ordinary language, identifying affected elements.
 
-```text
-                         ┌── Mechanical Activity ──┐
-                         │                         │
-START / INPUT ITEMS ─────┤                         ▼
-                         │                  INTEGRATION NODE
-                         │                         ▲
-                         └── Electronics Activity ┘
-```
+Errors include duplicate IDs, invalid references, missing/multiple Start nodes, invalid distributions or quantities, prohibited Start/Terminal connections, missing activity outcomes, and invalid probabilities or sums. Probabilities are never silently normalized.
 
-The Mechanical Activity produces:
+Warnings include apparently unreachable elements, possible deadlocks, possible nonterminating cycles, unused or unavailable items, competing consumption, and possible simultaneous terminal outcomes. Conservative structural warnings must not be treated as proof of an actual runtime conflict.
 
-```text
-mechanical_module
-```
+## 10. Analysis Philosophy
 
-The Electronics Activity produces:
+Expose distributions, not just averages. Distinguish $P(O=k)$, $E[T\mid O=k]$, and completion-time distributions conditional on observed terminal runs. A project that fails early can have a misleadingly small mean duration. Cutoff observations are not completed durations and do not prove nontermination.
 
-```text
-electronics_module
-```
+Future filters include terminal outcome, activity executed, item arrival, repetition count, and duration threshold. Cost filters follow cost modeling.
 
-Both items arrive at the Integration node.
+## 11. Visual Analysis
 
-The Integration activity requires:
+Planned views: duration histograms and cumulative distributions, outcome probability charts, activity execution heat maps, loop frequencies, sensitivity charts, and scenario comparisons. Cost charts follow the cost extension.
 
-```text
-mechanical_module
-electronics_module
-```
+## 12. Scenario Analysis
 
-It cannot begin until both are available.
+After the simulator is stable, duplicate models into named scenarios such as Baseline, Aggressive Schedule, Risk Reduction, and Alternative Supplier. Compare probabilities and duration metrics with consistent conditioning and limits. Low Cost scenarios and cost comparisons require the future cost model.
 
-This synchronization mechanism is a fundamental Version 0.1 feature.
+## 13. Loop and Rework Analysis
 
----
+Loops are central. Activity repetition counts support basic rework inspection. Future analysis includes probability of entering a loop, expected iterations, probability of at least N repetitions, schedule tail impact, and eventually cost impact. Do not claim exact nontermination probabilities from finite simulation cutoffs.
 
-# 5. Primary Product Goals
+## 14. Future: Conditional and Stateful GERT
 
-GERT Studio should allow the user to:
+Later versions may add variables such as attempt_count, budget_remaining, quality_score, and supplier_status; history-dependent probabilities; learning; degradation; and adaptive strategies. These are not implied by Version 0.1 flow-item semantics.
 
-1. Visually construct a project/process network.
-2. Place activities between project states.
-3. Define items required by activities.
-4. Define items produced by activities.
-5. Execute independent activities in parallel.
-6. Synchronize several parallel branches.
-7. Define uncertain activity durations.
-8. Define several possible outcomes of an activity.
-9. Assign probabilities to those outcomes.
-10. Define multiple terminal project outcomes.
-11. Run Monte Carlo simulations.
-12. Analyze project completion-time distributions.
-13. Analyze terminal-outcome probabilities.
-14. Understand which activities and outcomes drive schedule risk.
-15. Save, reload, and export complete models.
+## 15. Future: Decision Nodes
 
----
+Distinguish stochastic outcomes from user-controlled decisions. Eventually compare strategies using success probability, duration, cost, utility, and risk. Do not silently use an implicit decision policy to allocate conflicting Version 0.1 inventory.
 
-# 6. Version 0.1 Scope
+## 16. Parallel Workflows in Version 0.1
 
-Version 0.1 should support:
+True concurrent activities and synchronization through required items are part of Version 0.1. Dedicated AND/OR/XOR gateways, races, branch cancellation policies beyond terminal termination, and more elaborate concurrency controls may be added later.
 
-## Nodes
+## 17. Future: Capacity Constraints
 
-- Start
-- State / Resource
-- Terminal Outcome
+Limited engineers, machines, laboratories, shared facilities, queues, and calendars are deferred. Such capacities would be reserved and released, unlike the consumable flow items required now.
 
-## Items
+## 18. Future: Sensitivity and Criticality
 
-Nodes may contain several named items.
+Study schedule sensitivity, terminal-outcome sensitivity, rework impact, and stochastic criticality. The central question is which uncertainty is worth reducing, rather than only which deterministic path is longest.
 
-Example:
+## 19. Future: Value of Information
 
-```text
-Node: Integration
+Explore the value of tests, research, prototypes, delayed commitments, and information acquisition through changes in expected decision utility. No decision-optimization solver is required now.
 
-Items:
-- mechanical_design
-- electronics_design
-- firmware
-```
+## 20. Future: Model Updating
 
-Activities can require combinations of these items.
+Observed progress may eventually update duration distributions and outcome probabilities using empirical or Bayesian methods. Cost distributions follow the future cost model.
 
-## Activities
+## 21. File and Data Philosophy
 
-An activity contains:
+Use an explicitly versioned, human-readable structured format independent of the editor. Canonical top-level concepts are `schema_version`, `project`, `item_types`, `nodes`, and `activities`; simulation settings should be explicit. Outcome connections are stored under their parent activities rather than as an unrelated sequential edge model.
 
-- name,
-- source node,
-- required input items,
-- duration distribution,
-- one or more possible outcomes.
+Export and reload must preserve model semantics. Support deterministic serialization where practical, and explicit migrations where compatibility cannot be preserved.
 
-Each outcome contains:
+## 22. Deployment
 
-- probability,
-- target node,
-- produced items.
+Standalone, self-hosted, Docker-based application. It must not depend on a coding assistant at runtime. Development uses Docker Compose. One-command deployment and final port packaging are deployment goals.
 
-## Duration Distributions
+## 23. Technology and Delivery Sequence
 
-Initially:
+Current environment: Windows host, Docker Desktop with Linux containers, Python 3.12 inside Docker, FastAPI, Pydantic, NumPy, SciPy, NetworkX, and pytest. Run Python and tests inside Docker; do not require host Python. This document does not pin dependency versions.
 
-- fixed,
-- uniform,
-- triangular,
-- PERT-beta.
+Later frontend: React, TypeScript, React Flow, and Plotly or equivalent. JSON export/import is required for a usable Version 0.1; SQLite is a possible later storage choice, not a Phase 1 requirement.
 
-## Parallel execution
+Phase 1 API scope:
 
-Several activities may be running simultaneously.
+- `GET /api/health`
+- `POST /api/models/validate`
+- `POST /api/simulate`
 
-## Synchronization
+Planned repository locations are `backend/app/`, `backend/tests/`, `examples/`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md`. Project CRUD/persistence endpoints are outside Phase 1 scope. The final usable Version 0.1 product includes visual editing and model save/load.
 
-An activity may require several items before it can begin.
+## 24. Product Principles
 
-## Probabilistic outcomes
+Cycles are legal. Mathematical correctness precedes polish. Seeds and assumptions are explicit. The UI does not define semantics. Monte Carlo is the primary general solver; exact methods are future options for suitable restricted classes. Show distributions, conditioning, and sample sizes. Explain invalid models rather than silently correcting them.
 
-Every activity has one or more possible outcomes.
+## 25. Definition of a Successful Version 0.1
 
-The probabilities of the outcomes of a particular activity must satisfy:
+A user can model parallel mechanical, electronics, and software development; synchronize their outputs at Integration; test the integrated prototype; and route failed tests through Rework to a fresh test request. The user can assign uncertain durations and probabilistic outcomes, simulate reproducibly, inspect terminal probabilities, duration distributions, test attempts and rework counts, and save/reload the model.
 
-\[
-\sum_{k=1}^{n}p_k=1
-\]
-
-within numerical tolerance.
-
-## Monte Carlo analysis
-
-Users should be able to execute:
-
-- 1,000 simulations,
-- 10,000 simulations,
-- 100,000 simulations,
-- or a custom number.
-
-A random seed should be supported for reproducibility.
-
----
-
-# 7. Important Probability Rule
-
-Parallel execution means that probabilities cannot simply be assigned to every activity leaving a node and globally required to sum to 1.
-
-For example:
-
-```text
-                   Mechanical Design
-                  /
-START / ITEMS ───<
-                  \
-                   Electronics Design
-```
-
-Both activities may execute.
-
-They are not alternatives.
-
-Therefore there is no probability such as:
-
-```text
-Mechanical = 50%
-Electronics = 50%
-```
-
-Both happen.
-
-Probability instead belongs to an activity's **outcomes**.
-
-Example:
-
-```text
-                 ┌── PASS   0.80
-TEST ACTIVITY ───┤
-                 └── FAIL   0.20
-```
-
-and:
-
-\[
-0.80+0.20=1.
-\]
-
-A deterministic activity has one outcome:
-
-\[
-p=1.
-\]
-
-This rule preserves the requirement that alternative probabilities always sum to 1 while still allowing parallel activities.
-
----
-
-# 8. Stochastic Choice Between Procedures
-
-Sometimes the project itself must choose one of several alternative procedures.
-
-Example:
-
-```text
-                ┌── Procedure A   0.60
-READY ──────────┤
-                └── Procedure B   0.40
-```
-
-This can initially be modeled as a zero-duration routing activity with two outcomes.
-
-Future versions may introduce an explicit graphical **Chance Gateway** for this purpose.
-
----
-
-# 9. Parallel Execution
-
-Version 0.1 must not assume that only one activity is active.
-
-For example:
-
-```text
-t = 0
-
-Mechanical Design      running
-Electronics Design     running
-Software Development   running
-```
-
-Activities finish according to their independently sampled durations.
-
-An integration activity may then wait for all required outputs.
-
-Example:
-
-```text
-Mechanical finished      t = 4.2
-Software finished        t = 5.7
-Electronics finished     t = 8.1
-
-Integration starts       t = 8.1
-```
-
-This is one of the defining features of the product.
-
----
-
-# 10. Integration and Synchronization
-
-Nodes should naturally support accumulation.
-
-Example:
-
-```text
-                 Mechanical Module
-                        │
-                        ▼
-                 ┌──────────────┐
-Software ───────►│ INTEGRATION  │◄──── Electronics
-                 │              │
-                 └──────┬───────┘
-                        │
-                 requires all 3
-                        ▼
-                  SYSTEM ASSEMBLY
-```
-
-The Integration node may receive its required items at different times.
-
-The next activity starts only when its complete input requirement is satisfied.
-
----
-
-# 11. Resources in Version 0.1
-
-Version 0.1 distinguishes between:
-
-## Flow resources
-
-Supported.
-
-Examples:
-
-- material,
-- component,
-- design,
-- completed module,
-- approval,
-- test result.
-
-These move through the network.
-
-## Capacity resources
-
-Not yet supported.
-
-Examples:
-
-- five engineers,
-- one test facility,
-- two machines,
-- limited supplier capacity.
-
-Capacity-resource scheduling is planned for a later version.
-
-This distinction keeps the first simulation engine manageable while still supporting integration and parallel development.
-
----
-
-# 12. Costs
-
-Cost modeling is useful but is **not required for Version 0.1**.
-
-The architecture should allow cost to be added later without changing the underlying network semantics.
-
-Future activity cost support may include:
-
-- fixed cost,
-- uncertain cost,
-- cost per execution,
-- resource-related cost,
-- project cost distributions.
-
-Version 0.1 should focus on getting the stochastic workflow and timing model correct first.
-
----
-
-# 13. Cycles and Rework
-
-The architecture must allow cycles.
-
-Example:
-
-```text
-                    PASS
-TEST ─────────────────────────► NEXT STAGE
- │
- │ FAIL
- ▼
-REWORK
- │
- └────────────────────────────► TEST
-```
-
-Basic cycle execution should preferably be supported in Version 0.1.
-
-However, advanced cycle analysis is not required for Version 0.1.
-
-The minimum requirement is:
-
-> The data model and simulation architecture must never make future cycle support impossible.
-
-Recommended Version 0.1 target:
-
-- cycles accepted by the model,
-- cycles executable by Monte Carlo simulation,
-- simulation safety limits included,
-- advanced analytical loop calculations deferred.
-
----
-
-# 14. Core User Interface
-
-The main screen should contain:
-
-## Network Canvas
-
-Interactive graph containing nodes and activities.
-
-## Model Explorer / Properties
-
-Selecting a node displays:
-
-- node name,
-- items currently defined at that node,
-- terminal properties where applicable.
-
-Selecting an activity displays:
-
-- activity name,
-- required items,
-- duration distribution,
-- outcomes,
-- probability of each outcome,
-- items produced by each outcome.
-
-## Analysis Panel
-
-Initially:
-
-- probability of each project outcome,
-- expected completion time,
-- median completion time,
-- P80,
-- P90,
-- P95,
-- activity execution probability,
-- expected activity execution count,
-- node/item arrival information.
-
----
-
-# 15. Simulation Visualization
-
-Eventually the graph itself should display simulation information.
-
-Example:
-
-```text
-Mechanical Design
-P(executed) = 100%
-Mean finish = 4.2 months
-
-Electronics Design
-P(executed) = 100%
-Mean finish = 6.8 months
-
-Rework
-P(executed) = 27%
-Expected executions = 0.39
-```
-
-Edges may vary visually according to execution probability or expected number of executions.
-
----
-
-# 16. Version 0.1 Output Metrics
-
-At minimum:
-
-## Outcome metrics
-
-- probability of each terminal outcome,
-- probability of successful termination,
-- probability of deadlock,
-- probability of simulation cutoff.
-
-## Time metrics
-
-- expected project completion time,
-- median,
-- P50,
-- P80,
-- P90,
-- P95.
-
-Metrics should also eventually be available conditional on outcome:
-
-\[
-E[T\mid \text{Success}]
-\]
-
-and:
-
-\[
-E[T\mid \text{Failure}].
-\]
-
-## Activity metrics
-
-For each activity:
-
-- probability activity executes,
-- expected number of executions,
-- mean start time when executed,
-- mean finish time when executed.
-
-## Node/item metrics
-
-Where useful:
-
-- probability an item reaches a node,
-- mean arrival time,
-- percentile arrival times.
-
----
-
-# 17. Project Completion
-
-Projects should finish through explicit Terminal Outcome nodes.
-
-Examples:
-
-```text
-SUCCESS
-TECHNICAL FAILURE
-CANCELLED
-REJECTED
-PARTIAL SUCCESS
-```
-
-Terminal outcome nodes may be classified as:
-
-- success,
-- failure,
-- neutral,
-- custom.
-
-Reaching a terminal outcome terminates that simulation realization.
-
-Remaining running activities are cancelled for that realization.
-
----
-
-# 18. Deadlock Detection
-
-A project can reach a state where:
-
-- no activities are running,
-- no activity is enabled,
-- no terminal outcome has been reached.
-
-This is a **deadlock**.
-
-Example:
-
-```text
-Integration requires:
-
-A
-B
-C
-
-but C can never arrive.
-```
-
-The simulator must report deadlock explicitly.
-
-It must not silently classify deadlock as project failure.
-
----
-
-# 19. Validation
-
-Validation should detect:
-
-## Errors
-
-- no Start node,
-- invalid references,
-- negative duration parameters,
-- activity with no outcome,
-- outcome probability outside \([0,1]\),
-- outcome probabilities not summing to 1,
-- missing item definitions,
-- impossible activity requirements where statically provable.
-
-## Warnings
-
-- unreachable node,
-- unreachable terminal outcome,
-- possible deadlock,
-- possible infinite cycle,
-- item produced but never used,
-- item required but apparently never produced,
-- integration waiting on a low-probability branch,
-- simulation safety cutoff may be required.
-
-The application must not silently normalize probabilities.
-
----
-
-# 20. Monte Carlo First
-
-Because the model contains:
-
-- parallel activities,
-- synchronization,
-- resource accumulation,
-- and potentially cycles,
-
-Monte Carlo simulation will be the primary Version 0.1 analysis method.
-
-Exact mathematical solvers may later be implemented for restricted classes of models.
-
-The product should never imply that Monte Carlo estimates are exact values.
-
----
-
-# 21. Data Architecture
-
-The canonical model must remain independent of the UI.
-
-Conceptually:
-
-```json
-{
-  "schema_version": "0.1",
-  "project": {},
-  "item_types": [],
-  "nodes": [],
-  "activities": [],
-  "settings": {}
-}
-```
-
-Activities should be stored separately from graphical React Flow edges.
-
-This makes it possible to change how activities are drawn without changing their mathematical meaning.
-
----
-
-# 22. Deployment
-
-GERT Studio must be a standalone self-hosted application.
-
-Primary target:
-
-```text
-Docker
-```
-
-Eventually:
-
-```bash
-docker run -p 8080:8080 gert-studio
-```
-
-should start the complete application.
-
-The runtime application must not require:
-
-- Antigravity,
-- ChatGPT,
-- a cloud AI provider.
-
-AI-assisted modeling may be added later as an optional feature.
-
----
-
-# 23. Initial Technology Stack
-
-## Frontend
-
-- React
-- TypeScript
-- React Flow
-
-## Backend / Engine
-
-- Python
-- FastAPI
-- Pydantic
-- NumPy
-- SciPy
-
-## Simulation
-
-Custom event-driven discrete-event simulation engine.
-
-NetworkX may be used for:
-
-- reachability,
-- graph validation,
-- cycle analysis,
-- structural inspection.
-
-## Storage
-
-Initially:
-
-- JSON
-- optionally SQLite for project management.
-
-## Testing
-
-- pytest
-- frontend unit tests
-- Playwright
-
-## Deployment
-
-- Docker
-- Docker Compose during development.
-
----
-
-# 24. Product Principles
-
-### 24.1 Activities belong to the workflow, not the UI
-
-The graphical representation must never define mathematical semantics.
-
-### 24.2 Nodes accumulate project items
-
-Nodes are meaningful project states and synchronization points.
-
-### 24.3 Activities transform project state
-
-Activities consume required items and produce new items.
-
-### 24.4 Parallel execution is fundamental
-
-The system must never assume only one activity is active.
-
-### 24.5 Alternative probabilities always sum to 1
-
-Within each activity outcome set:
-
-\[
-\sum p_i=1.
-\]
-
-### 24.6 Never silently correct probabilities
-
-Incorrect probabilities are model errors.
-
-### 24.7 Monte Carlo results are distributions
-
-Do not reduce uncertainty to a single average.
-
-### 24.8 Reproducibility matters
-
-Random seeds must be supported.
-
-### 24.9 Cycles must remain structurally possible
-
-Even if some advanced cycle features are deferred.
-
-### 24.10 Mathematical correctness has priority over visual polish
-
----
-
-# 25. Definition of Successful Version 0.1
-
-Version 0.1 is successful if a user can model:
-
-```text
-START
-  │
-  ├────────► Mechanical Design ─────┐
-  │                                 │
-  ├────────► Electronics Design ────┼──► INTEGRATION
-  │                                 │
-  └────────► Software Development ──┘
-                                         │
-                                         ▼
-                                       TEST
-                                      /    \
-                                   PASS    FAIL
-                                   80%      20%
-                                    │        │
-                                    ▼        ▼
-                                 SUCCESS   REWORK
-```
-
-where:
-
-- the three development activities execute in parallel,
-- the Integration activity waits until all required outputs exist,
-- activity durations are stochastic,
-- Test has probabilistic outcomes that sum to 1,
-- Monte Carlo calculates the completion-time distribution,
-- output probabilities are calculated,
-- the project model can be saved and loaded.
-
-Basic rework-cycle simulation is desirable and should be supported if practical.
-
-Cost modeling is explicitly not required for Version 0.1.
-
-That constitutes the minimum useful GERT Studio product.
+The engine correctly consumes and produces named quantities, batches simultaneous events, handles basic cycles and safety limits, and reports ambiguities and deadlocks separately. Costs and capacity scheduling are not acceptance requirements. Mathematical rules and acceptance requirements are in MODEL.md.

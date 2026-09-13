@@ -1,8 +1,8 @@
 # GERT Studio — Mathematical Model Specification
 
-Revision: 2026-09-11 — synchronized review edition for Version 0.1.
+Revision: 2026-09-14 — approved semantic decisions D1–D8 for Version 0.1.
 
-Based on the user-edited 53-section specification supplied in this conversation. Broken equation formatting is repaired. The explicit runtime clarifications from the latest review are incorporated and identified below. Open execution questions are collected after Section 53; this document does not silently choose answers to them. Ready for architecture review, not unrestricted engine implementation.
+The approved decisions D1–D8 and their clarifications are normative and incorporated below.
 
 ## 1. Purpose
 
@@ -34,7 +34,7 @@ A State node may accumulate multiple different items from different activities a
 
 ## 6. Terminal Node
 
-Terminal metadata includes `outcome_code`, `outcome_label`, and `outcome_category`. Recommended categories are `success`, `failure`, `neutral`, and `custom`. Reaching a terminal ends the realization subject to the complete simultaneous-event batch rule in Sections 25, 32, and 33. Remaining running instances are cancelled.
+Terminal metadata includes `outcome_code`, `outcome_label`, and `outcome_category`. Recommended categories are `success`, `failure`, `neutral`, and `custom`. Terminal node IDs are authoritative. Terminal `outcome_code` values must be unique across terminal nodes; labels and categories need not be unique. Reaching a terminal ends the realization subject to the complete simultaneous-event batch rule in Sections 25, 32, and 33. Remaining running instances are cancelled when one modeled terminal ends the realization; an ambiguous-terminal result instead follows nonterminal lifecycle accounting in Section 28.
 
 ## 7. Item Types
 
@@ -46,7 +46,7 @@ For node v and item r:
 
 $$I_v(r,t)\geq0.$$
 
-Quantities may be nonnegative numeric values, not just Boolean presence. Examples: steel=50, prototype=1, approval_document=1. No sophisticated unit conversion is required. All referenced item types must be declared. Integer-only item classes, inventory caps, and numerical inventory tolerances are not defined here; see the open questions.
+Quantities may be nonnegative numeric values, not just Boolean presence. Examples: steel=50, prototype=1, approval_document=1. No sophisticated unit conversion is required. All referenced item types must be declared. Inventories, requirements, production, and consumption use exact decimal arithmetic. Enablement comparisons are exact. Do not use a generic quantity epsilon, silently round inventory arithmetic, or clamp tiny negative quantities. Integer-only item classes and inventory caps are not defined here.
 
 ## 9. Activity
 
@@ -54,7 +54,7 @@ An activity definition contains `id`, `label`, `source_node`, `requirements`, `d
 
 ## 10. Activity Input Requirements
 
-Each activity has requirements $R_a(r)\geq0$. It is individually enabled when:
+Each activity has requirements $R_a(r)\geq0$ and must contain at least one strictly positive consumable input requirement. Empty or all-zero requirements are validation errors. It is individually enabled when:
 
 $$I_{source(a)}(r,t)\geq R_a(r)\quad\text{for every required }r.$$
 
@@ -70,15 +70,15 @@ The same quantity cannot serve two instances. Read-only inputs, reusable tools, 
 
 ## 12. Parallel Activities
 
-Distinct activities can start at the same time when their combined requirements can be satisfied. Three Start items can independently enable Mechanical Design, Electronics Design, and Software Development at t=0. Their durations are sampled independently. Concurrent multiplicity of the **same activity definition** remains unresolved; parallelism of distinct definitions is required.
+Distinct activities can start at the same time when their combined requirements can be satisfied. Three Start items can independently enable Mechanical Design, Electronics Design, and Software Development at t=0. At each global enablement evaluation, each definition launches the maximum nonnegative integer number of concurrent instances permitted by its currently available consumable requirements, subject to the aggregate competition check and safety limits. The same definition may overlap itself. Each instance consumes its own requirements atomically and receives fresh independent duration and outcome samples at the lifecycle points specified below.
 
 ## 13. Resource Conflicts
 
 If individually enabled activities cannot all start together because their combined requirements exceed available consumable inventory, do not choose a winner by ID, dictionary order, queue order, or randomness.
 
-Latest review clarification: report runtime status `ambiguous_resource_competition`. Static analysis may conservatively warn, but must not reject a model merely because competition is theoretically possible. Conflict detection must consider aggregate demand, not just pairwise conflicts. Requirements are node-local; enablement is evaluated globally.
+Report runtime status `ambiguous_resource_competition`. Static analysis may conservatively warn, but must not reject a model merely because competition is theoretically possible. Conflict detection must consider aggregate demand, not just pairwise conflicts. Requirements are node-local; enablement is evaluated globally.
 
-An explicit probabilistic routing activity can express a modeled choice. Priorities, queues, allocation policies, and decisions are future features. Handling competition among repeated instances depends on the unresolved multiplicity rule.
+An explicit probabilistic routing activity can express a modeled choice. Priorities, queues, allocation policies, and decisions are future features. Aggregate demand includes the maximum launch multiplicities computed under Section 26. If those launch sets compete for insufficient shared inventory, report `ambiguous_resource_competition`; do not reduce one definition's multiplicity to choose an allocation implicitly. A genuine model ambiguity already observed before a prospective launch cutoff takes precedence over that cutoff.
 
 ## 14. Activity Duration
 
@@ -86,9 +86,11 @@ Each activity has a nonnegative duration random variable $D_a$. On instance star
 
 $$d\sim D_a,\qquad t_{finish}=t_{start}+d.$$
 
-Each new execution receives a fresh duration sample.
+Each new execution receives a fresh duration sample. User-entered duration parameters use exact decimal semantics. Simulation timestamps and scheduled finish times use an exact decimal-compatible representation, so mathematically equal timestamps are not separated by binary floating-point artifacts. The stochastic sampler may use an approved deterministic RNG internally, but sampled durations must be converted deterministically into the engine's canonical time representation before scheduling. The concrete implementation type and encoding may be chosen during architecture review, but must preserve these semantics and reproducibility.
 
 ## 15. Supported Duration Distributions
+
+Every duration uses an explicit `type` discriminator. Every required numeric parameter must be explicitly supplied; there are no hidden or default numeric distribution parameters. Canonical parameter names are `value` for fixed; `min`, `max` for uniform; `min`, `mode`, `max` for triangular; and `min`, `mode`, `max`, `lambda` for beta-PERT. The UI must clearly expose every required parameter.
 
 ### Fixed
 
@@ -104,13 +106,13 @@ $$D\sim\operatorname{Triangular}(a,m,b),\qquad0\leq a\leq m\leq b.$$
 
 ### Beta-PERT
 
-Minimum a, mode m, maximum b with $0\leq a\leq m\leq b$ and default shape parameter $\lambda=4$. When $a<b$:
+Beta-PERT requires explicit user-supplied `min` (a), `mode` (m), `max` (b), and `lambda` ($\lambda$). All parameters must be finite real numbers, with $0\leq a\leq m\leq b$ and $\lambda>0$. There is no numeric default for `lambda`. Incomplete or invalid parameters are validation errors. When $a<b$:
 
 $$\alpha=1+\lambda\frac{m-a}{b-a},\qquad\beta=1+\lambda\frac{b-m}{b-a},$$
 
 $$Y\sim\operatorname{Beta}(\alpha,\beta),\qquad D=a+(b-a)Y.$$
 
-When $a=b$, return a deterministically. Degenerate uniform and triangular distributions with equal endpoints are also deterministic; do not pass invalid degenerate parameters to a numerical sampler. Whether lambda is exposed as a configurable model field remains an implementation proposal for review, not a requirement.
+When $a=b$, return a deterministically. Degenerate uniform and triangular distributions with equal endpoints are also deterministic; do not pass invalid degenerate parameters to a numerical sampler. Explicit parameter requirements still apply to degenerate distributions.
 
 ## 16. Activity Outcomes
 
@@ -120,11 +122,17 @@ Each activity has a nonempty set $O_a=\{o_1,\ldots,o_n\}$. An outcome contains `
 
 $$0\leq p(o)\leq1,\qquad\left|\sum_{o\in O_a}p(o)-1\right|\leq\epsilon,$$
 
-with recommended/default tolerance $\epsilon=10^{-9}$ from the latest review. Never silently normalize probabilities. PASS=0.70 and FAIL=0.20 is invalid. The numerical sampling convention for a sum accepted within tolerance must be documented and reviewed; validation tolerance is not permission to rewrite stored probabilities.
+with `probability_epsilon = 1e-14`, so $\epsilon=10^{-14}$. Each probability must individually be finite and within [0,1]. The declared probabilities must pass these individual requirements and the inclusive sum tolerance before the sampling convention below applies; the resulting final effective interval must also be valid. PASS=0.70 and FAIL=0.20 is invalid.
+
+Stored declared probabilities are never rewritten, and proportional normalization is prohibited. Use canonical outcome-ID order. For all outcomes except the canonical final outcome, use their declared probabilities as sampling intervals, arranged cumulatively in that order. Define the final outcome's effective interval as:
+
+$$p_{last,effective}=1-\sum_{i\text{ preceding last}}p_i.$$
+
+This interval must be valid, $0\leq p_{last,effective}\leq1$; do not use this convention if it is invalid. After the original declared total passes the inclusive 1e-14 tolerance, the final outcome absorbs only the tiny accepted residual, whether the declared total is slightly below or slightly above 1. This closes the sampling intervals exactly to 1 and is a sampling convention only; it does not modify stored model probabilities.
 
 ## 18. Deterministic Activities
 
-A single-outcome activity has probability 1. A deterministic outcome does not imply deterministic duration; these are distinct properties.
+A single-outcome activity selects its sole outcome with certainty; its declared probability must satisfy Section 17, including the tolerance around 1. A deterministic outcome does not imply deterministic duration; these are distinct properties.
 
 ## 19. Why Probability Belongs to Outcomes
 
@@ -156,27 +164,39 @@ This provides AND-join behavior without a separate gateway construct. It does no
 
 ## 24. Event-Driven Simulation
 
-Maintain a priority queue of completion events. Time jumps to the next completion timestamp; no fixed time stepping is needed. Initialize inventory at t=0 and evaluate starts. After every full event batch, classify terminal results and otherwise reevaluate enablement globally. Do not implement this scheduling loop until the start-multiplicity and safety-boundary questions below have been resolved.
+Maintain a priority queue of completion events. Time jumps to the next completion timestamp; no fixed time stepping is needed. Initialize inventory at t=0 and evaluate starts. After every full permitted event batch, classify terminal results and otherwise reevaluate enablement globally. Apply the launch multiplicity rules in Section 26 and inclusive atomic safety limits in Section 30.
 
 ## 25. Simultaneous Events
 
-All events sharing the same timestamp form one batch. Sample their outcomes and deposit all outputs before starting new activities. Never return immediately after the first terminal event in a batch.
+All events sharing the same canonical simulation timestamp form one batch. Compare canonical times exactly using the representation in Section 14. Sample their outcomes and deposit all outputs before starting new activities. Never return immediately after the first terminal event in a batch.
 
-Latest review clarification: newly started zero-duration activities create **successive batches at the same timestamp**, not additions to the batch currently being processed. Safety limits must prevent infinite zero-time cycles. Approximate timestamp coalescing is not authorized; any proposed time tolerance must be reviewed.
+Newly started zero-duration activities create **successive batches at the same timestamp**, not additions to the batch currently being processed. Safety limits must prevent infinite zero-time cycles. Do not use an arbitrary timestamp epsilon or approximate timestamp coalescing.
 
 ## 26. Starting Enabled Activities
 
 Evaluate enablement globally and check combined consumable requirements before starting a conflict-free set. Consume input atomically at start. Never partially start a competing group just because one definition is processed first. Available inventory can enable distinct activities concurrently.
 
-The previous phrase “any set” must not authorize arbitrary subset selection. Repeated-instance launch counts, retriggering with leftover inventory, and empty requirements remain open questions. Do not invent `max_concurrent_instances` or another policy field to resolve them.
+For each definition a, compute its maximum launch count from the same current inventory before any proposed launch consumes inputs:
+
+$$k_a=\min_{r:R_a(r)>0}\left\lfloor\frac{I_{source(a)}(r,t)}{R_a(r)}\right\rfloor.$$
+
+Compute this integer bound exactly from decimal quantities. At least one positive requirement is mandatory, so the minimum is defined. Existing running instances do not impose a same-definition concurrency cap. Check the combined demand of all proposed instances across definitions before consumption; insufficient shared inventory is `ambiguous_resource_competition`, not permission to choose a subset. Check the whole conflict-free launch set against the instance limit before admitting it. Each admitted instance consumes its own inputs atomically and becomes started. Reevaluate using current inventory after each permitted completion batch, including leftover inventory and newly produced items. No `max_concurrent_instances` policy field is introduced.
 
 ## 27. Repeated Execution
 
-A definition may execute again when new input arrives, such as Test → failed item → Rework → fresh test request → Test. Every execution is a separate instance with fresh stochastic samples. This does not by itself settle concurrent instances of the same definition.
+A definition may execute again when new input arrives, such as Test → failed item → Rework → fresh test request → Test. Every execution is a separate instance with fresh independent stochastic samples. Concurrent instances of the same definition follow the maximum-multiplicity rule in Section 26.
 
 ## 28. Activity Definition vs Activity Instance
 
-A definition describes an activity. An instance is one execution and records its start, scheduled finish, sampled duration, and selected outcome when completed. Cancelled instances have not completed and must not be assigned a sampled completion outcome retrospectively. Define the exact public instance schema during architecture review.
+A definition describes an activity. An instance is one execution and records its start, scheduled finish, sampled duration, and selected outcome when completed. It becomes `started` when its requirements are consumed, and `completed` only when its completion event is processed and an outcome is sampled. A running instance terminated because a modeled terminal ended the realization is `cancelled`.
+
+A running instance still active when the realization ends for a nonterminal reason is `unfinished_at_run_end`. Track its reason, including at least cutoff, ambiguity, and invalid runtime state. Reporting may expose `unfinished_at_cutoff`, `unfinished_at_ambiguity`, and `unfinished_at_invalid_runtime` as reason-specific counters. Do not classify ambiguity- or cutoff-interrupted work as cancelled. Neither cancelled nor unfinished instances receive retrospective completion outcomes.
+
+At realization end, maintain the lifecycle invariant:
+
+`started = completed + cancelled + unfinished_at_run_end`
+
+Track these counts separately as specified in Section 38. The public instance schema must preserve these lifecycle rules.
 
 ## 29. Cycles
 
@@ -184,15 +204,34 @@ Cycles and feedback are legal. Basic test/rework cycles are a Version 0.1 accept
 
 ## 30. Simulation Safety Limits
 
-Recommended explicit settings:
+Simulation-request safety settings are inclusive maxima:
 
 - `max_activity_completions`
 - `max_simulation_time`
 - `max_activity_instances`
 
-Run statuses include `terminal`, `deadlock`, `cutoff_activity_count`, `cutoff_time`, `invalid_runtime_state`, `ambiguous_resource_competition`, and `ambiguous_terminal`.
+Run statuses include `terminal`, `deadlock`, `cutoff_activity_count`, `cutoff_instance_count`, `cutoff_time`, `invalid_runtime_state`, `ambiguous_resource_competition`, and `ambiguous_terminal`.
 
-Report cutoffs separately from modeled outcomes. A cutoff is not proof of nontermination. Exact boundary behavior, precedence, and the status for an instance-count cutoff require review; do not silently overload a status or truncate a simultaneous batch.
+Reaching a configured maximum exactly is permitted; it does not by itself end the run.
+
+For each prospective completion batch, apply this deterministic precedence:
+
+1. Inspect the next batch timestamp, $t_{next}$.
+2. If $t_{next}>\texttt{max_simulation_time}$, return `cutoff_time`.
+3. Otherwise, if processing the complete batch would exceed `max_activity_completions`, return `cutoff_activity_count`.
+4. Otherwise process the complete batch atomically.
+
+Thus the time horizon is checked before the completion-count budget for the same prospective batch. Do not inspect or sample outcomes from a batch blocked by either cutoff.
+
+- Process events only at $t\leq\texttt{max_simulation_time}$. An event beyond the horizon cannot be processed and causes `cutoff_time` when progression would require it.
+- A same-timestamp completion batch is atomic with respect to `max_activity_completions`. If processing the entire batch would exceed that maximum, process none of it and return `cutoff_activity_count`. Do not sample its outcomes or deposit its production.
+- All launches from one global enablement evaluation are atomic with respect to `max_activity_instances`, the cumulative started-instance limit. If the full launch set would exceed it, admit none of the set and return `cutoff_instance_count`; do not partially consume its inputs.
+- A permitted full batch reaching one terminal returns `terminal`; a permitted batch reaching multiple distinct terminals returns `ambiguous_terminal`. Both take precedence over merely reaching a count maximum exactly.
+- Never process an over-limit batch to discover whether it would reach a terminal.
+- Zero-duration chains at exactly the time horizon remain eligible as successive same-time batches, subject to finite instance/completion limits.
+- Report a genuine model ambiguity already observed before a prospective launch cutoff rather than hiding it behind that cutoff.
+
+Report cutoffs separately from modeled outcomes. A cutoff is not proof of nontermination. Running instances at a safety cutoff are `unfinished_at_run_end` with reason cutoff, reportable as `unfinished_at_cutoff`, and are not cancelled.
 
 ## 31. Deadlock
 
@@ -208,7 +247,7 @@ Apply all batch production first, then terminate and cancel remaining running in
 
 ## 33. Simultaneous Terminal Outcomes
 
-If a batch reaches more than one distinct Terminal node, classify `ambiguous_terminal` after processing the complete batch. Do not pick one by ordering, probability, category, or label. Distinct nodes remain distinct even if their category is the same.
+If a batch reaches more than one distinct Terminal node, classify `ambiguous_terminal` after processing the complete batch. Do not pick one by ordering, probability, category, or label. Distinct nodes remain distinct even if their category is the same. Instances completed in the batch remain completed; any still-running instances are `unfinished_at_run_end` with reason ambiguity, not cancelled.
 
 ## 34. Monte Carlo Simulation
 
@@ -216,7 +255,13 @@ For N realizations, initialize each with the same model inventory. Sample activi
 
 ## 35. Reproducibility
 
-Accept a seed and return the seed used. Reproduce results for the same model, engine version, settings, and seed to the degree supported by numerical libraries. Record versions needed to interpret this guarantee. Deterministic random-number assignment must not become an implicit resource-allocation policy. Proposed event ordering and stream derivation should be documented during review.
+Use deterministic independently keyed random streams, not one traversal-dependent global RNG stream. Derive streams from the root seed, realization index, activity ID, activity-instance ordinal, and draw purpose. Duration and outcome sampling use separate streams. Assign deterministic monotonically increasing instance ordinals within each (realization, activity_id). Sample durations at start and outcomes only at completion.
+
+Semantically irrelevant ordering of serialized nodes, activities, items, and outcomes must not change results. Use canonical ID-based ordering when ordering is needed, including cumulative outcome sampling. Canonical ordering must never resolve resource competition. UI-only metadata and labels do not affect RNG streams; changing canonical mathematical IDs may change them.
+
+The same mathematical model, simulation settings, root seed, and reproducibility version must produce identical realizations and aggregate results regardless of execution parallelism. Increasing the realization count must preserve the earlier realization prefix. Aggregation must also honor the parallelism-independent result guarantee.
+
+Results must record the root seed, engine version, and reproducibility version. If no seed is supplied, generate one and return it. Do not use Python's built-in `hash()` for the reproducibility contract. The architecture must document the concrete stable key encoding, stream derivation, sampling algorithms, and reproducibility version in conformance with this contract.
 
 ## 36. Project Completion-Time Statistics
 
@@ -234,13 +279,13 @@ Report terminal outcomes, deadlocks, safety cutoffs, ambiguous results, and inva
 
 ## 38. Activity Execution Statistics
 
-If $X_i(a)$ is the execution count for activity a in realization i:
+Track separate counts for `started`, `completed`, `cancelled`, and `unfinished_at_run_end`, following Section 28 and its end-of-realization invariant. Track reasons for unfinished instances, including cutoff, ambiguity, and invalid runtime state; reason-specific counters may be exposed separately. Initial activity-frequency metrics use starts. If $X_i(a)$ is the started-instance count for activity a in realization i:
 
 $$\widehat E[X(a)]=\frac1N\sum_{i=1}^{N}X_i(a),$$
 
 $$\widehat P(X(a)\geq1)=\frac1N\sum_{i=1}^{N}\mathbf1\{X_i(a)\geq1\}.$$
 
-Probability of at least two executions is useful for loops. Started versus completed counting and treatment of cancellation must be settled explicitly before exposing a single field called “executions.” Counts from cutoff runs are truncated observations; label them accordingly.
+Label these metrics as mean starts per realization and probability of at least one start. Probability of at least two starts is useful for loops. Completed, cancelled, and unfinished-at-run-end counts, with unfinished reasons, remain separately reportable. Counts from cutoff runs are truncated observations; label them accordingly. Do not conflate completion, cancellation, and unfinished work in a generic execution count.
 
 ## 39. Activity Timing Statistics
 
@@ -270,7 +315,9 @@ Nodes holding items, activities consuming and producing them, concurrency, and i
 
 Require unique node, activity, and item-type IDs; exactly one Start; valid initial items; existing sources and targets; declared item references; at least one outcome per activity; finite probabilities in [0,1] summing to 1 within tolerance; valid finite duration parameters; finite nonnegative quantities; no outgoing Terminal activities; and no incoming outcomes into Start. Reject NaN and infinities, which cannot represent valid finite inventory or scheduled durations in this model.
 
-Outcome-ID uniqueness scope and terminal-code uniqueness are schema questions to resolve during review. Zero requirements are currently allowed by the inequalities, but their execution consequences are unresolved; do not silently introduce a nonempty-requirement constraint.
+Node IDs, activity IDs, and item-type IDs must each be unique within the model. Outcome IDs must be unique within their parent activity; canonical outcome identity is (activity_id, outcome_id). Terminal node IDs are authoritative and terminal `outcome_code` values must be unique across terminal nodes; labels and categories need not be unique.
+
+Reject empty or all-zero requirements; every activity needs at least one strictly positive consumable input. Apply exact decimal quantity validation and comparisons. Validate probabilities with `probability_epsilon = 1e-14` and require a valid final effective sampling interval as specified in Section 17. Require the explicit duration discriminator and every required numeric parameter from Section 15; do not insert hidden numeric defaults. User-entered duration parameters have exact decimal semantics. Beta-PERT requires finite user-supplied `min`, `mode`, `max`, and `lambda`, with `0 <= min <= mode <= max` and `lambda > 0`; incomplete or invalid parameters are validation errors, including in degenerate cases.
 
 ## 46. Additional Validation Warnings
 
@@ -297,7 +344,7 @@ The following is an illustrative structure, not a runnable acceptance fixture. A
 }
 ```
 
-The exact versioned schema and location of simulation-request settings should be proposed during architecture review; do not add semantic fields without a supporting rule.
+Simulation settings belong to the simulation request, not inside the mathematical model. A future project/export container may store the model and preferred simulation settings as separate sections. The exact versioned schema must preserve the identity rules in Section 45, explicit duration parameters in Section 15, and exact decimal quantities. Do not add semantic fields without a supporting rule.
 
 ## 48. Example Activity
 
@@ -342,48 +389,49 @@ A Test at Test Ready consumes a prototype. PASS (0.8) reaches Success; FAIL (0.2
 
 1. Deterministic linear workflow: known finish time is exact.
 2. Parallel workflow: durations 3, 5, and 8 enable Integration exactly at t=8.
-3. Stochastic duration: sampled statistics match each supported distribution with justified tolerances; include degenerate cases.
+3. Stochastic duration: sampled statistics match each supported distribution with justified tolerances; include degenerate cases. Beta-PERT rejects missing parameters, nonfinite values, nonpositive lambda, and invalid min/mode/max ordering; no lambda default is inserted. Sampled durations are deterministically converted to canonical simulation time before scheduling.
 4. Probabilistic outcomes: empirical 0.8/0.2 frequencies are statistically consistent.
-5. Invalid probabilities: 0.7/0.2 is rejected; test boundaries and tolerance without normalization.
+5. Invalid probabilities: 0.7/0.2 is rejected; reject individually invalid/nonfinite probabilities. Test sums below and above 1 at, within, and outside the inclusive 1e-14 tolerance. In canonical outcome-ID order, all preceding intervals retain their declared values and the final effective interval equals 1 minus their sum. Verify residual closure for both accepted undersums and oversums, a valid final effective interval, and absence of proportional normalization or stored-value rewriting. An accepted near-one declared total with an invalid final effective interval must not be sampled using this convention.
 6. Synchronization: an activity requiring A, B, and C remains disabled until all exist.
-7. Simultaneous completion: all batch production precedes new starts.
+7. Simultaneous completion: all batch production precedes new starts. Canonical times compare exactly: fixed decimal durations 0.1 followed by 0.2 finish at the same timestamp as a parallel fixed duration 0.3. Distinct canonical timestamps must not be merged by an epsilon or approximate coalescing.
 8. Deadlock: an unsatisfiable workflow with no running/enabled activity reports deadlock.
-9. Seed reproducibility: identical model, version, settings, and seed reproduce results.
+9. Seed reproducibility: identical mathematical model, settings, root seed, and reproducibility version reproduce identical realizations and aggregates across execution parallelism and irrelevant serialized ordering. Reordering outcomes preserves canonical cumulative sampling. Increasing realization count preserves the earlier prefix. Labels/UI metadata do not affect draws. Verify separate duration/outcome keys and monotonically assigned per-activity instance ordinals; results return root seed and both version fields, including generated seeds.
 10. Basic cycle: Test/Rework/Test repeats correctly and respects limits.
 11. Competition: actual aggregate inventory conflict reports `ambiguous_resource_competition`; theoretical competition alone is a warning.
 12. Terminals: two distinct terminals in one batch report `ambiguous_terminal`; repeated arrivals at one terminal do not.
 13. Terminal production: apply output before terminal classification; cancel remaining running instances without marking them completed.
 14. Zero-duration chains: successive same-time batches work, and zero-time cycles meet safety limits.
-15. Quantities: input consumption and output accumulation are correct and never double-spend inventory.
+15. Quantities: exact decimal consumption, accumulation, and comparisons never double-spend inventory. Include fractional quantities and exact enablement boundaries; no generic epsilon, rounding, or tiny-negative clamping is allowed.
 16. Reporting: statuses account for all realizations; nonterminal times are not included in terminal duration statistics; zero terminal samples produce unavailable metrics.
 
-Add multiplicity, cutoff-boundary, and count-convention tests after the associated semantic decisions are approved. These tests must verify the specification, not freeze an arbitrary implementation assumption.
+17. Multiplicity: launch the maximum integer number of same-definition instances permitted by all positive requirements, including while earlier instances are running. Verify individual consumption, independent keyed samples, and reevaluation after production. Aggregate competition between definitions reports ambiguity without implicitly reducing a definition's launch count.
+18. Positive requirements: empty and all-zero requirements are rejected; a requirement set with at least one positive quantity may include zero entries.
+19. Safety boundaries: exact maxima are permitted. Check the prospective batch timestamp first: if beyond the horizon, return `cutoff_time` even if the completion budget would also block it. Otherwise an over-budget whole completion batch returns `cutoff_activity_count`; otherwise process it atomically. Over-budget launch sets are rejected in full with `cutoff_instance_count`. No blocked batch has its outcomes inspected or sampled or produces outputs; no rejected launch set consumes inputs. A permitted batch's terminal or ambiguous-terminal result wins over exact count-limit attainment. An observed model ambiguity wins over a prospective launch cutoff. Successive zero-duration batches at the horizon remain eligible within count limits.
+20. Lifecycle counters: consumption increments starts; only processed completions with sampled outcomes increment completions. At realization end verify `started = completed + cancelled + unfinished_at_run_end`. Modeled-terminal interruption is cancelled; running instances interrupted by cutoff, ambiguity (including ambiguous terminals), or invalid runtime state are unfinished with the corresponding reason, not cancelled. Verify start-based means/frequencies across all realizations and separately report completed, cancelled, and unfinished observations with reasons.
+21. Schema: enforce each model-wide ID namespace, activity-local outcome uniqueness, and terminal-code uniqueness while permitting repeated terminal labels/categories. Require duration discriminators and all numeric parameters, including beta-PERT shape, even in degenerate cases. Simulation settings are separate from the mathematical model.
+
+These tests must verify the approved specification, not freeze an arbitrary implementation assumption.
 
 ## 53. Fundamental Version 0.1 Principles
 
 - Activities execute; nodes hold items and state.
-- Distinct activities may execute simultaneously.
-- Activities start only when their required quantities exist.
+- Distinct activities and multiple instances of one definition may execute simultaneously, with maximum consumable-input multiplicity.
+- Activities require at least one positive consumable input and start only when their exact decimal required quantities exist.
 - Inputs are consumed at start; selected outcomes produce outputs at completion.
-- Probabilities sum to 1 within each activity's outcomes and are never silently normalized.
+- Probabilities sum to 1 within the inclusive 1e-14 tolerance for each activity; declared cumulative sampling closes only the final residual interval and never proportionally normalizes.
 - Synchronization follows from input requirements.
 - Process full simultaneous-event batches before enabling activities or choosing a terminal result.
+- Enforce inclusive safety maxima atomically for completion batches and launch sets.
+- Use exact decimal duration-parameter semantics and exact canonical simulation-time comparisons, without timestamp epsilon or approximate coalescing.
+- Keep starts, completions, cancellations, and unfinished-at-run-end counts separate, tracking unfinished reasons and preserving the lifecycle invariant; initial frequency metrics use starts.
+- Independently keyed randomness preserves results across irrelevant ordering and execution parallelism.
 - Report unresolved resource competition and simultaneous distinct terminals explicitly.
 - Monte Carlo is the general Version 0.1 solver.
 - Cycles are legal and basic cycle execution is required.
 - Costs and capacity scheduling are deferred.
 
-## Open Questions — Review Before Affected Implementation
+## Approved Decisions — D1–D8
 
-These are unresolved semantics, not an invitation to invent defaults:
+The normative rules above implement these decisions: D1 multiplicity (Sections 12, 13, 26, 27); D2 positive requirements (10, 45); D3 exact decimal quantities (8, 26, 45); D4 inclusive atomic safety limits (30); D5 probability validation and residual sampling (17, 18); D6 lifecycle counters (28, 38); D7 schema identity, explicit parameters, and settings placement (6, 15, 45, 47); and D8 independently keyed reproducibility (35). Section 52 provides acceptance requirements for these decisions.
 
-1. **Same-definition concurrency and multiplicity:** If inventory supports several executions, how many start now? Can one definition overlap itself? What retriggers it when leftover inventory remains? No `max_concurrent_instances` field is approved.
-2. **Empty/all-zero requirements:** Such an activity is always enabled under the current inequalities. Is it prohibited, one-shot, externally triggered, or governed by another explicit rule? Safety limits alone do not define the intended firing policy.
-3. **Quantity arithmetic:** Numeric quantities are allowed. Choose and approve exact/decimal/floating representation and any comparison tolerance or tiny-negative handling; do not silently round quantities or invent integer/continuous item types.
-4. **Safety boundaries and precedence:** Define inclusive/exclusive time horizons, completion/instance limits at simultaneous batches, precedence when a terminal coincides with a limit, and the instance-limit status. Preserve complete-batch terminal semantics.
-5. **Probability tolerance sampling:** Specify how accepted sums differing from 1 by at most epsilon are sampled without silently modifying or normalizing the model.
-6. **Execution counters:** Define started, completed, and cancelled counts and which feeds the displayed execution metric, including cutoff runs.
-7. **Schema identity rules:** Decide outcome-ID uniqueness scope, terminal-code uniqueness, duration field names, and simulation settings placement. These choices must support the stated semantics.
-8. **Random stream assignment:** Document how draws are assigned to instances and batch events reproducibly, including behavior under reordered serialized elements. No random policy may resolve a resource conflict.
-
-Current next step: Antigravity reads both files and returns its interpretation, architecture (including examples and architecture/roadmap documents), contradictions, unresolved questions, and correctness test plan. It must not implement the mathematical engine or modify these specifications during this review-only step.
+Architecture and public schemas must conform to these decisions without adding implicit allocation policies, numeric defaults, or other unapproved semantics.
