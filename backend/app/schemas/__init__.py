@@ -1,0 +1,2 @@
+"""Versioned public input contracts."""
+
