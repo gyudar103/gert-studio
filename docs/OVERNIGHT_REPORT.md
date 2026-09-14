@@ -1,6 +1,116 @@
 # GERT Studio v0.1 Overnight Backend Report
 
-Final backend pre-merge review, 2026-09-14.
+## Resumed backend verification, 2026-09-14 (evening)
+
+This section records the current verification and supersedes the historical
+branch, merge, Docker-version and frontend-status statements below.
+
+### Starting state and previously completed work
+
+- Repository: `C:\Users\guy drori\gert-studio`.
+- Current branch: `codex/frontend-m1`; starting HEAD:
+  `255060d2cc419fd16b7812bf2d645039ad825785`. Worktree was clean.
+- Both `main` and `codex/overnight-backend-v0.1` already point to
+  `bd45d73d40f6da8c95c3aff3ff2ec164d63596b7`. The backend milestone was already
+  merged; no branch switch or repeat merge was needed or performed.
+- All three refs have backend tree `6e1e7143c7437770b0215d049dfdc747fac8c44e`.
+  Backend code and ARCHITECTURE.md are unchanged from the prior reviewed commit.
+  PRODUCT.md and MODEL.md remain identical to approved checkpoint `a4d0d85`.
+- The earlier review completed the Docker build, 87-test suite, HTTP validation
+  and simulation checks, deterministic repetition and cross-platform stochastic
+  compatibility checks recorded below. Existing fixes and regression tests were
+  reviewed again; unchanged cross-platform checks were not unnecessarily repeated.
+- Existing committed frontend work was preserved. This task performed no frontend
+  implementation or frontend verification.
+
+### Docker repair and fresh verification
+
+Initially the Linux engine pipe was unavailable. After engine recovery, Compose
+showed both existing GERT services stopped. Startup logs confirmed the recurring
+stale socket rename failures. Under the user's existing narrow authorization,
+Docker processes were stopped, WSL was shut down, and stale reparse/socket
+artifacts were unlinked under Docker's `run` directory: `dockerInference`,
+`dockerEthernetVfkit`, `sailor-ingest.sock` and `userAnalyticsOtlpHttp.sock`.
+Recreated stale sockets from failed starts were cleared again with Docker stopped.
+The separately authorized Secrets Engine `engine.sock` was removed only after
+logs confirmed it blocked startup; `engine.sock.stale` was absent.
+No broader system repair, reset, reinstall, registry change, or deletion of images,
+volumes or WSL distributions was performed.
+
+The final Desktop start command timed out while starting; subsequent engine probes
+and `docker desktop status` confirmed successful startup. Docker Desktop is now
+running, version 4.91.0 (239619), with Linux client/server engine 29.8.0, API 1.56.
+These versions were already installed when this task resumed; this task did not
+upgrade Docker. `docker version` and `docker info` both succeeded.
+
+- `docker compose up --build -d backend`: passed using existing cached layers.
+  Built manifest list:
+  `sha256:20aa010192f1d75a22239aadb8290effc124fd948d60b8b4e0519e3d6a8a1a50`.
+- Compose initially reused its old container. `docker compose up -d --force-recreate
+  backend` then successfully recreated the backend from the built image.
+- Final full-suite command in that recreated container:
+  `docker compose exec -T backend python -m pytest tests -q -p no:cacheprovider`.
+  Exact result: **87 passed, 2 warnings in 5.25s**, exit 0, Python 3.12.14.
+  The two warnings are the upstream test-client deprecations described below.
+- The backend is running on host port 8000. The existing frontend remains stopped
+  (its prior exit status was 1); investigating it is outside this backend task.
+
+All required HTTP checks were repeated from the Windows host after container
+recreation, using the deterministic fixture and explicit settings documented below:
+
+| Check | Fresh result |
+| --- | --- |
+| GET /api/health | HTTP 200, `{"status":"ok"}` |
+| POST /api/models/validate, valid fixture | HTTP 200, valid=true, no diagnostics |
+| POST /api/models/validate, probability total 0.7 | HTTP 200, valid=false, probability_sum error; no normalization |
+| POST /api/simulate, fixed duration 0.3 | HTTP 200; 3 terminal realizations; exact terminal mean and quantiles 0.3 |
+| Repeat identical simulation, seed 20260914 | HTTP 200; complete response content identical |
+
+Both response hashes also match the earlier approved fixture:
+`a947d20321f57f689decc45112ff1fbe2462d8b0402becd2442bb22ef73493e7`.
+
+### Review result and remaining backend gaps
+
+No new implementation defect or Phase 1 backend blocker was identified. The seven
+previous fixes and their regressions remain present. Review against PRODUCT.md,
+MODEL.md and ARCHITECTURE.md confirmed explicit numeric inputs; exact inventories
+and canonical timestamps; accepted residual probability handling without rewriting;
+atomic timestamp batches; horizon-before-completion-budget checks; terminal
+precedence; resource-conflict ambiguity; maximum same-definition multiplicity;
+lifecycle partitions; keyed, ordering-independent randomness; and canonical API
+input/error contracts. No unsupported allocation policy or numeric default was
+found. No application code changes or new regression tests were needed.
+
+Remaining backend limitations are unchanged: the successful simulation response
+lacks a complete typed OpenAPI response schema, reports retain per-instance data
+in memory, dependency resolution is not fully locked, stochastic sampling has a
+documented finite numerical range, and static warnings are conservative. Large-load
+benchmarking and production hardening remain future engineering work. These are
+not newly discovered blocking mathematical decisions.
+
+### Repository result and recommendation
+
+Only this report changed in the resumed task. The local documentation commit is
+named `docs: record resumed backend verification`; its hash is reported in the
+completion message. `git diff --check`, frozen-spec comparisons and final post-commit
+Git status are checked before completion. Expected final status:
+
+```text
+On branch codex/frontend-m1
+nothing to commit, working tree clean
+```
+
+The backend milestone remains suitable for acceptance. It is already in `main`,
+so there is no remaining merge of `codex/overnight-backend-v0.1` to recommend or
+perform. This backend-only verification makes no new frontend merge recommendation.
+No push or merge was performed in this task.
+
+---
+
+## Original backend pre-merge review (historical record, 2026-09-14)
+
+The remaining sections describe the original pre-merge checkpoint, including its
+then-current branch and frontend scope, rather than the current repository state.
 
 Recommendation: merge `codex/overnight-backend-v0.1` into `main` as the Phase 1
 backend milestone. Docker verification and backend acceptance checks passed.
