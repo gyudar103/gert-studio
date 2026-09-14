@@ -93,7 +93,7 @@ tooling decision.
 ## Commit and recommendation
 
 The implementation and tests are ready as a frontend milestone for review. The branch
-has not been pushed or merged. After the final clean-worktree check, the local commits
-will be recorded here by hash. Recommendation: merge into `main` after review of the
+has not been pushed or merged. Implementation commit: `92b8da8` (`feat: add GERT Studio
+frontend milestone one`). Recommendation: merge into `main` after review of the
 in-memory UX and the explicit limitations above; do not treat this milestone as the
 complete saved/exportable Version 0.1 product.
