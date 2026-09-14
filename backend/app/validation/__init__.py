@@ -76,6 +76,8 @@ def validate_model(model: Model) -> ValidationReport:
                 emit("item_reference", "Required item is not declared", path + ["requirements", r], a.id)
             if q > 0:
                 consumers[a.source_node, r].add(a.id)
+        ordered = sorted(a.outcomes, key=lambda o: o.id)
+        final = 1 - sum((Fraction(o.probability) for o in ordered[:-1]), Fraction())
         outcome_ids = set()
         for j, o in enumerate(a.outcomes):
             op = path + ["outcomes", j]
@@ -87,23 +89,29 @@ def validate_model(model: Model) -> ValidationReport:
                 emit("target_reference", "Target node does not exist", op + ["target_node"], a.id)
             elif target.type == "start":
                 emit("start_target", "Outcomes cannot target Start", op + ["target_node"], a.id)
-            if source is not None and target is not None and o.probability > 0:
+            effective = final if o is ordered[-1] else Fraction(o.probability)
+            if source is not None and target is not None and effective > 0:
                 graph.add_edge(source.id, target.id)
             for r, q in o.produced_items.items():
                 if r not in items:
                     emit("item_reference", "Produced item is not declared", op + ["produced_items", r], a.id)
-                if q > 0 and o.probability > 0:
+                if q > 0 and effective > 0:
                     producers[o.target_node, r].add(a.id)
-        ordered = sorted(a.outcomes, key=lambda o: o.id)
         total = sum((Fraction(o.probability) for o in ordered), Fraction())
         if abs(total - 1) > PROBABILITY_EPSILON:
             emit("probability_sum", "Outcome total must be within 1e-14 of one; values are not normalized", path + ["outcomes"], a.id)
-        final = 1 - sum((Fraction(o.probability) for o in ordered[:-1]), Fraction())
         if not 0 <= final <= 1:
             emit("probability_interval", "Final effective sampling interval must lie in [0,1]", path + ["outcomes"], a.id)
 
     if any(d.severity == "error" for d in diagnostics):
         return ValidationReport(valid=False, diagnostics=diagnostics)
+
+    for i, a in enumerate(model.activities):
+        source = nodes[a.source_node]
+        if source.type == "start" and any(
+                q > source.initial_inventory.get(r, 0) for r, q in a.requirements.items()):
+            emit("impossible_enablement", "Start inventory is insufficient for this activity and cannot be replenished",
+                 ["activities", i, "requirements"], a.id, "warning")
 
     reachable = {starts[0].id} | nx.descendants(graph, starts[0].id)
     for i, n in enumerate(model.nodes):
@@ -132,4 +140,3 @@ def validate_model(model: Model) -> ValidationReport:
     if not set(terminals) & reachable:
         emit("possible_deadlock", "No terminal has an apparent path from Start", ["nodes"], severity="warning")
     return ValidationReport(valid=True, diagnostics=diagnostics)
-

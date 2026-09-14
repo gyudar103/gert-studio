@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.routes import router
+from app.api.openapi import install_openapi
 
 
 app = FastAPI(
@@ -8,6 +9,7 @@ app = FastAPI(
 )
 
 app.include_router(router)
+install_openapi(app)
 
 
 @app.get("/api/health")

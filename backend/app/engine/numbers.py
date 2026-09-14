@@ -24,8 +24,6 @@ def decimal_text(value: Fraction) -> str:
 
 def ratio_text(value: Fraction) -> str:
     """Aggregate ratios can recur: report 34 significant decimal digits."""
-    from decimal import Decimal, localcontext
-    with localcontext() as context:
-        context.prec = 34
+    from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
+    with localcontext(Context(prec=34, rounding=ROUND_HALF_EVEN)):
         return str(Decimal(value.numerator) / Decimal(value.denominator))
-

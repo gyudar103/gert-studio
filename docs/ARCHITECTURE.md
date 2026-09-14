@@ -13,6 +13,7 @@ Those specifications remain unchanged. The engine has no FastAPI dependency.
 - app/engine/service.py: validation, seed generation and ordered Monte Carlo orchestration.
 - app/reporting/: status/outcome counts, conditional duration statistics, lifecycle aggregation.
 - app/api/routes.py: lossless JSON parsing and thin HTTP adapters.
+- app/api/openapi.py: request and validation-response schemas for the lossless adapters.
 - tests/: specification-derived unit, statistical, engine, reproducibility and API tests.
 
 ## Canonical model and transport
@@ -22,7 +23,9 @@ Node types are start/state/terminal. Only Start has initial_inventory; all other
 inventories start empty. Terminal metadata is required. Requirements, produced_items,
 and outcome lists are explicit. Outcome identity is activity-local; no global outcome
 ID restriction is imposed. Numeric distribution parameters have no defaults.
-The beta-PERT discriminator is "beta-PERT"; lambda is the external shape parameter name.
+The beta-PERT discriminator is "beta-PERT"; lambda is the required external shape
+parameter name on both input and default serialization. The internal Python attribute
+shape is not accepted as an alternative input field.
 
 SimulationRequest has model and settings. Settings require realizations and all three
 safety limits; seed is optional and generated/returned when absent. A worker count is
@@ -83,7 +86,11 @@ These numerical algorithms and conversions are part of the reproducibility versi
 Changing Python's sampling implementation or math behavior requires compatibility
 verification and potentially a new reproducibility version. Very large finite
 beta shape inputs can exceed the numerical sampler's range; this is reported as
-invalid_runtime_state rather than silently changing parameters. No numeric default
+invalid_runtime_state rather than silently changing parameters. The guard also checks
+the gamma algorithm's intermediate 2 * shape for finite binary64 representation before
+entering its rejection loop, where overflow would otherwise prevent termination.
+Mathematically valid inputs remain schema-valid; this is a numerical runtime limitation.
+No numeric default
 is inserted. There is no claim of infinite numerical precision in stochastic draws.
 
 One or multiple orchestration threads execute independently keyed realizations.
@@ -105,6 +112,10 @@ simulation scheduler. Warnings include unreachable nodes, absent local item supp
 unused local items, potential competition, cycles/unbounded generation, possible
 deadlocks, and multiple reachable terminals. They do not establish exact stochastic
 reachability or prove conflict/nontermination. Cycles are accepted.
+Graph edges and item-producer warnings use the validated effective final sampling
+interval, including an accepted residual on a declared-zero final outcome. Start
+requirements exceeding its nonreplenishable initial inventory produce an
+impossible-enablement warning, not a validation error.
 
 ## Event loop and lifecycle
 
@@ -140,7 +151,8 @@ Every required status and terminal node appears, including zero counts, with N a
 denominator. Terminal statistics include sample size, conditioning, mean, median/P50,
 P80/P90/P95, min and max; unavailable values are null. Quantiles use linear interpolation
 at (n-1)p (type 7). Means and probabilities that have recurring decimal expansions
-are formatted at 34 significant decimal digits using a local context; engine state
+are formatted at 34 significant decimal digits using a fresh ROUND_HALF_EVEN context
+independent of the caller's Decimal context; engine state
 and exact ordering are never rounded by reporting. Quantiles/min/max retain exact
 terminating-decimal output.
 
@@ -157,11 +169,14 @@ valid schemas return HTTP 200 with valid and diagnostics, including semantic err
 Malformed JSON/schema receives HTTP 422. POST /api/simulate accepts model/settings,
 returns HTTP 422 for invalid models, and otherwise returns versioned results.
 Simulation runs off the async event loop in a threadpool.
+OpenAPI exposes the same Pydantic input contracts, required fields, and structured
+validation/error responses while keeping lossless JSON parsing in the adapters.
+The successful simulation payload is currently documented by this architecture and
+the reporting tests; it does not yet have a fully typed OpenAPI response model.
 
 Run the suite in Docker:
-docker compose run --rm backend python -m pytest tests -q -p no:cacheprovider
+docker compose exec -T backend python -m pytest tests -q -p no:cacheprovider
 
 The repository-local Python 3.12 environment is only a development fallback while
 Docker is unavailable; Docker verification is separately recorded in OVERNIGHT_REPORT.md.
 Neither host installation nor system-wide Python configuration is required.
-

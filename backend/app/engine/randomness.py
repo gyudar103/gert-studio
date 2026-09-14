@@ -46,6 +46,10 @@ def sample_duration(distribution, rng) -> Fraction:
             raise SamplingError("Beta-PERT shape exceeds sampler numerical range") from exc
         if not all(math.isfinite(x) and x > 0 for x in (alpha, beta)):
             raise SamplingError("Invalid numerical beta shape")
+        # Python 3.12's gamma rejection sampler computes sqrt(2 * shape - 1).
+        # Overflow makes its acceptance expression NaN and the loop never exits.
+        if not all(math.isfinite(2 * x) for x in (alpha, beta)):
+            raise SamplingError("Beta-PERT shape exceeds gamma sampler numerical range")
         normalized = rng.betavariate(alpha, beta)
     if not math.isfinite(normalized) or not 0 <= normalized <= 1:
         raise SamplingError("Sampler produced an invalid duration fraction")
@@ -61,4 +65,3 @@ def select_outcome(outcomes, rng):
         if draw < cumulative:
             return outcome
     return ordered[-1]
-

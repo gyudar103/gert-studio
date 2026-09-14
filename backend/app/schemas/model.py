@@ -24,7 +24,7 @@ Identifier = Annotated[str, Field(min_length=1)]
 
 
 class Contract(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
 
 class Fixed(Contract):
@@ -136,4 +136,3 @@ class Settings(Contract):
 class SimulationRequest(Contract):
     model: Model
     settings: Settings
-
