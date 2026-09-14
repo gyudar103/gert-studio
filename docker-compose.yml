@@ -1,4 +1,14 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      API_TARGET: http://backend:8000
+    depends_on:
+      - backend
+
   backend:
     build:
       context: .
