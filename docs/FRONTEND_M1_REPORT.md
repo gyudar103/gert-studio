@@ -1,6 +1,93 @@
 # GERT Studio Frontend Milestone 1 report
 
-Date: 2026-09-14
+## Version 0.1 release verification — 2026-09-20
+
+The current prototype includes the original frontend below plus lossless model
+JSON import/export and automated Chromium integration tests. This section
+supersedes the original limitations and test counts in the historical report.
+PRODUCT.md and MODEL.md remain identical to approved checkpoint `a4d0d85`.
+
+### Failed test diagnosis
+
+The construction E2E test was reproduced before editing. Its captured browser
+accessibility tree contained an editable `Quantity 1 *` textbox inside the
+`Initial inventory` group. The old exact `Quantity 1` locator omitted the required
+marker and timed out. The application conforms to PRODUCT.md sections 6.2 and 8.1:
+Start inventory and activity requirements have explicitly editable quantities.
+
+Only `frontend/e2e/workspace.spec.ts` needed correction for this failure. It now
+uses textbox roles scoped to the named inventory/requirements groups, permits the
+required marker, verifies blank required input and retained `0.1`, and uses the
+existing Fit View control before dragging a connection. The corrected test creates
+a model from scratch, validates it, and simulates three terminal runs at time 0.3.
+No application behavior or specification was changed to accommodate the test.
+
+### Pending-file review and disposition
+
+Every file pending at the start of release preparation was inspected:
+
+| Files | Classification and disposition |
+| --- | --- |
+| `.gitignore` | Intended release hygiene; ignores local environments, secrets, caches, IDE files, build output and browser artifacts; example environment templates remain eligible for tracking |
+| `docker-compose.yml`, `frontend/Dockerfile` | Intended optional browser-test service and separate development/test build targets |
+| `docs/FRONTEND_ARCHITECTURE.md` | Intended file-format and test-workflow documentation |
+| `frontend/package.json` | Harmless readable formatting; dependencies and scripts unchanged |
+| `frontend/src/App.tsx`, `frontend/src/files.ts` | Intended JSON file workflow, validation before replacement and clearly separated rejected-import diagnostics |
+| `frontend/src/api.ts` | Intended raw validation adapter and preservation of legal special IDs in null-prototype response dictionaries |
+| `frontend/vite.config.ts` | Intended explicit allowance of the internal Compose frontend hostname |
+| `frontend/e2e/workspace.spec.ts`, `frontend/playwright.config.ts`, `frontend/src/files.test.ts` | Intended browser and exact-file regression tests, including the corrected quantity locator |
+
+No accidental/unwanted source change was found or discarded. `.venv`, Python and
+pytest caches, frontend `node_modules`, TypeScript build metadata, screenshots and
+Playwright traces are local/generated artifacts and remain ignored. No ignored
+artifact is tracked. Credential-pattern scans of candidate files and reachable
+history found no matches; this is a targeted check, not a claim of exhaustive
+secret detection.
+
+### Verification before merge
+
+All commands ran in Docker against the current prototype:
+
+| Gate | Result |
+| --- | --- |
+| Frontend Vitest | **31 passed (31)** in 3 test files; duration 6.29s |
+| Frontend TypeScript/Vite build | Passed; 208 modules; built in 3.21s |
+| Complete Chromium E2E suite | **3 passed (7.3s)** |
+| Complete backend pytest suite | **87 passed, 2 warnings in 6.55s** |
+| Frontend page | HTTP 200 at port 5173 |
+| GET /api/health | HTTP 200, `{"status":"ok"}`, directly and through the frontend proxy |
+| Browser validation/simulation | Passed for built-in demo and newly constructed deterministic model |
+| JSON export/import reproducibility | Entire seeded demo response identical after reload |
+| Invalid file and decimal-token import | Passed; current state preserved on rejection; decimal strings retained |
+| Git whitespace/specification checks | Passed; frozen specifications unchanged |
+
+The two backend warnings remain upstream Starlette/httpx and AnyIO deprecations.
+The demo has parallel activities, synchronization, stochastic distributions,
+multiple terminals and a cycle. Its results show 98 approved and 2 stopped runs
+for the explicit 100-run demo settings. The UI retains separate terminal/status
+tables, conditional completion statistics and activity lifecycle counts.
+
+### Commits and release decision
+
+- Existing frontend implementation: `92b8da8`; original report: `255060d`.
+- Existing backend re-verification report: `437a00c`.
+- `0cf9623` — `feat: complete v0.1 JSON workflow and browser verification`.
+- Release documentation commit: `docs: document verified v0.1 prototype release`.
+
+The frontend branch is suitable for a fast-forward merge into main and publication
+as the annotated `v0.1.0` prototype tag after final main verification. The configured
+target is `https://github.com/gyudar103/gert-studio.git`; a dry-run push confirmed
+write authentication without changing remote refs. Actual push results and final
+commit/tag hashes are reported in the release completion message.
+
+Remaining limits: workspace state is in memory between file saves; JSON does not
+preserve layout or run settings; imports require a running backend and a valid
+model; advanced charts, mobile polish, database persistence, generated API clients,
+and production hardening remain future work. The existing dependency audit reports
+two moderate development-tool advisories. This release does not change dependencies
+or claim production hardening.
+
+## Original milestone report — historical record, 2026-09-14
 
 Frontend Milestone 1 delivers the first usable graphical modeling → validation →
 simulation loop on branch `codex/frontend-m1`. `PRODUCT.md` and `MODEL.md` remain
