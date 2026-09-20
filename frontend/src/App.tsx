@@ -3,6 +3,7 @@ import type {Activity,Diagnostic,GertNode,Item,Model,Selection,SettingsForm,Simu
 import {apiModel,diagnosticSelection,emptySettings,emptyWorkspace,freshId,newActivity,newNode} from './model';
 import {ApiError,runSimulation,validateModel} from './api';
 import {demoSettings,demoWorkspace} from './demo';
+import {downloadModel,importModel} from './files';
 import Canvas from './components/Canvas';
 import Properties from './components/Properties';
 import {Field} from './components/Fields';
@@ -15,13 +16,16 @@ export default function App() {
   const [report,setReport]=useState<ValidationReport>();
   const [result,setResult]=useState<SimulationResult>();
   const [error,setError]=useState('');
-  const [busy,setBusy]=useState<'validate'|'simulate'|null>(null);
+  const [busy,setBusy]=useState<'validate'|'simulate'|'import'|null>(null);
+  const [importDiagnostics,setImportDiagnostics]=useState(false);
+  const fileInput=useRef<HTMLInputElement>(null);
   const lock=useRef(false);
   const [tab,setTab]=useState<'validation'|'results'>('validation');
   const [canvasVersion,setCanvasVersion]=useState(0);
   const [focus,setFocus]=useState(0);
   const model=workspace.model;
   function changeModel(update:(m:Model)=>Model) {
+    setImportDiagnostics(false);
     setWorkspace(w=>({...w,model:update(w.model)}));setReport(undefined);setResult(undefined);setError('');
   }
   function addNode(type:GertNode['type']) {
@@ -30,6 +34,7 @@ export default function App() {
     setWorkspace(w=>({...w,layout:{...w.layout,nodes:[...w.layout.nodes,{x:80+(index%3)*320,y:100+Math.floor(index/3)*190}]}}));setSelection({kind:'node',index});
   }
   function addActivity(source='',target='') {
+    if(lock.current) return;
     const index=model.activities.length;
     changeModel(m=>({...m,activities:[...m.activities,newActivity(freshId('activity',m.activities),source,target)]}));
     const sourceIndex=model.nodes.findIndex(n=>n.id===source),point=workspace.layout.nodes[sourceIndex]||{x:0,y:index*160};
@@ -56,16 +61,29 @@ export default function App() {
   }
   function replace(demo:boolean) {
     if((model.nodes.length||model.activities.length||model.item_types.length) && !window.confirm('Replace the current network? Unsaved edits will be lost.')) return;
-    setWorkspace(demo?demoWorkspace():emptyWorkspace());setSettings(demo?{...demoSettings}:emptySettings());setSelection(null);setReport(undefined);setResult(undefined);setError('');setCanvasVersion(v=>v+1);
+    setWorkspace(demo?demoWorkspace():emptyWorkspace());setSettings(demo?{...demoSettings}:emptySettings());setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);setCanvasVersion(v=>v+1);
   }
   async function submit(kind:'validate'|'simulate') {
     if(lock.current) return;
-    lock.current=true;setBusy(kind);setError('');setResult(undefined);
+    lock.current=true;setBusy(kind);setError('');setResult(undefined);setReport(undefined);setImportDiagnostics(false);
     try {
       if(kind==='validate') {setReport(await validateModel(apiModel(workspace)));setTab('validation');}
       else {const response=await runSimulation(apiModel(workspace),settings);setReport(response.validation);setResult(response);setTab('results');}
     } catch(e) {setError(e instanceof Error?e.message:'Request failed. Please retry.');if(e instanceof ApiError && e.diagnostics) setReport(e.diagnostics);setTab('validation');}
     finally {lock.current=false;setBusy(null);}
+  }
+  async function loadFile(file:File) {
+    if(lock.current) return;
+    lock.current=true;setBusy('import');setError('');
+    try {
+      const imported=await importModel(await file.text());
+      if((model.nodes.length||model.activities.length||model.item_types.length) && !window.confirm('Replace the current network with this validated file? Export first to keep your edits.')) return;
+      setWorkspace(imported.workspace);setSelection(null);setResult(undefined);
+      setReport(imported.report);setImportDiagnostics(false);setTab('validation');setCanvasVersion(v=>v+1);
+    } catch(e) {
+      setError(e instanceof Error?e.message:'Could not read the file. Your current model is unchanged.');
+      if(e instanceof ApiError && e.diagnostics) {setReport(e.diagnostics);setImportDiagnostics(true);setTab('validation');}
+    } finally {lock.current=false;setBusy(null);}
   }
   function selectDiagnostic(d:Diagnostic) {const selected=diagnosticSelection(model,d.path,d.element_id);if(selected){setSelection(selected);setFocus(f=>f+1);}}
   return <div className="app">
@@ -77,6 +95,9 @@ export default function App() {
           <Field label="Project name" value={model.project.name} onChange={name=>changeModel(m=>({...m,project:{...m.project,name}}))}/>
           <details><summary>Project identity</summary><Field label="Project ID" required value={model.project.id} onChange={id=>changeModel(m=>({...m,project:{...m.project,id}}))}/></details>
           <div className="project-actions"><button onClick={()=>replace(false)}>New blank</button><button onClick={()=>replace(true)}>Load demo</button></div>
+          <div className="project-actions"><button onClick={()=>fileInput.current?.click()}>Import JSON</button><button onClick={()=>downloadModel(workspace)}>Export JSON</button></div>
+          <input ref={fileInput} type="file" accept=".json,application/json" aria-label="Import model JSON" hidden onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file) void loadFile(file);}}/>
+          <p className="hint">JSON saves the mathematical model. Layout is regenerated on import; run settings stay separate. Import requires backend validation. Export can also save unfinished edits.</p>
           <p className="hint">Demo: parallel build, integration, stochastic test and rework. Loading it supplies visible example values.</p>
           <div className="section-heading"><h2>Items</h2><button className="subtle" onClick={()=>{const index=model.item_types.length;changeModel(m=>({...m,item_types:[...m.item_types,{id:freshId('item',m.item_types),label:'New item'}]}));setSelection({kind:'item',index});}}>+ Item</button></div>
           {!model.item_types.length && <p className="hint">Add the things your activities consume and produce.</p>}
@@ -98,7 +119,7 @@ export default function App() {
       <fieldset className="editor-shell" disabled={!!busy}><Properties model={model} selection={selection} updateNode={updateNode} updateActivity={updateActivity} updateItem={updateItem} remove={remove}/></fieldset>
     </main>
     <section className="analysis-panel" aria-label="Analysis"><div className="analysis-heading"><div role="tablist" aria-label="Analysis views"><button role="tab" aria-selected={tab==='validation'} onClick={()=>setTab('validation')}>Validation {report?`· ${report.diagnostics.length}`:''}</button><button role="tab" aria-selected={tab==='results'} onClick={()=>setTab('results')}>Simulation results</button></div><small>Backend semantics · Exact decimal inputs</small></div>
-      <div className="analysis-content">{tab==='validation'?(report?<Diagnostics report={report} onSelect={selectDiagnostic}/>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
-    </section><footer>GERT Studio <span>Local workspace · Unsaved changes are lost on refresh</span></footer>
+      <div className="analysis-content">{tab==='validation'?(report?<>{importDiagnostics && <p className="analysis-empty">These diagnostics refer to the rejected import file. Your current network is unchanged.</p>}<Diagnostics report={report} onSelect={importDiagnostics?()=>{}:selectDiagnostic}/></>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
+    </section><footer>GERT Studio <span>Local workspace · Export JSON to keep your model before refreshing</span></footer>
   </div>;
 }

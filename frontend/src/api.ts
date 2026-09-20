@@ -1,6 +1,8 @@
 import JSONbigFactory from 'json-bigint';
 import type {Model, SettingsForm, SimulationResult, ValidationReport} from './types';
-export const exactJSON=JSONbigFactory({useNativeBigInt:true, strict:true, protoAction:'error', constructorAction:'error'});
+// The parser creates null-prototype dictionaries. Preserve legal model IDs even
+// when they happen to be named "constructor" or "__proto__".
+export const exactJSON=JSONbigFactory({useNativeBigInt:true, strict:true, protoAction:'preserve', constructorAction:'preserve'});
 export class ApiError extends Error { constructor(message:string, public diagnostics?:ValidationReport) {super(message);} }
 function integer(text:string,label:string) {
   if(!/^[+-]?\d+$/.test(text)) throw new ApiError(`${label}: enter a whole number.`);
@@ -23,5 +25,6 @@ async function post<T>(path:string,body:string):Promise<T> {
   if(!response.ok) throw new ApiError(response.status===422?'The backend found invalid model or simulation settings. Review the diagnostics.':`Simulation service error (HTTP ${response.status}). Please retry.`, Array.isArray(data?.diagnostics)?data:undefined);
   return data as T;
 }
-export const validateModel=(model:Model)=>post<ValidationReport>('/api/models/validate',exactJSON.stringify(model));
+export const validateModelJSON=(body:string)=>post<ValidationReport>('/api/models/validate',body);
+export const validateModel=(model:Model)=>validateModelJSON(exactJSON.stringify(model));
 export const runSimulation=(model:Model,settings:SettingsForm)=>post<SimulationResult>('/api/simulate',simulationBody(model,settings));

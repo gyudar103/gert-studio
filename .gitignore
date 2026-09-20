@@ -5,19 +5,50 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+venv/
+env/
+.env/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+.coverage.*
+coverage.xml
 
 # Environment / secrets
 .env
 .env.*
+!.env.example
+!.env.sample
+.envrc
+secrets/
+.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.pypirc
 
 # Frontend
 node_modules/
 dist/
 build/
+coverage/
+.vite/
+*.tsbuildinfo
+test-results/
+playwright-report/
 
 # IDE / OS
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.code-workspace
 
 # Logs
 *.log

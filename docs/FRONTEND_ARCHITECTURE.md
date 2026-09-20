@@ -54,7 +54,51 @@ Simulation results preserve the backend's status denominator, terminal-only dura
 conditioning, lifecycle counters, and returned seed. A submission lock prevents
 duplicate requests while either operation is running.
 
-## Demonstration model and tests
+## JSON files
+
+`files.ts` exports only the mathematical model, with decimal fields stored as
+strings. Export is also available for incomplete drafts; a draft must be corrected
+before it can pass import validation. A lexical pass quotes number tokens while
+leaving complete JSON string tokens untouched. The existing strict `json-bigint`
+parser therefore reads numeric lexemes as strings without a JavaScript Number
+conversion. The original, unmodified file is sent to backend validation, preserving
+its JSON types as well as numeric tokens. The prepared workspace is installed only
+after schema and semantic validation succeed. This is transport handling, not a
+second mathematical validator; it cannot silently turn an invalid numeric ID into
+a valid string ID. No additional parsing dependency is needed.
+Duplicate keys and malformed JSON are rejected; no value is repaired or normalized.
+
+An invalid file never replaces the current model. Its diagnostics are explicitly
+labeled as file diagnostics and do not navigate the unrelated current graph.
+Valid imports ask before replacing an existing network and retain backend warnings.
+Canvas positions are regenerated; optional imported `ui_metadata` is deliberately
+excluded from the mathematical workspace. Existing run settings stay separate and
+unchanged. Exported files do not contain layout or run settings.
+
+The response parser uses null-prototype dictionaries and preserves all legal IDs,
+including `constructor` and `__proto__`, rather than rejecting them as object keys.
+
+## Automated browser verification
+
+`frontend/e2e/workspace.spec.ts` uses Playwright Chromium against the real frontend
+and backend. It covers demo load/validate/simulate/results, JSON download and reload,
+identical seeded responses after reload, exact numeric-token import, rejected-file
+state preservation, and creating a deterministic network using forms and a canvas
+handle connection. These tests complement the fast Vitest component/transport tests.
+
+The optional Compose `test` profile builds a separate `browser-tests` Docker target
+with Chromium and its dependencies. Normal startup uses only the `development`
+target and does not install a browser. No host Node installation is required:
+
+```text
+docker compose up --build -d
+docker compose exec -T frontend npm test
+docker compose exec -T frontend npm run build
+docker compose --profile test run --build --rm frontend-tests
+docker compose exec -T backend python -m pytest tests -q -p no:cacheprovider
+```
+
+## Demonstration workflow
 
 `demo.ts` supplies a real backend-valid workflow: parallel mechanical and software
 work, integration synchronization, a Beta-PERT test with success/retry/reject
@@ -72,8 +116,9 @@ activity lifecycle tables.
 
 ## Deliberate milestone limits
 
-This milestone keeps edits in memory. Persistent save/load, export/import controls,
-advanced charts, scenario comparison, sensitivity analysis, authentication,
+The live workspace is in memory; JSON import/export provides file save/load.
+Database persistence, layout/run-settings file storage, advanced charts,
+scenario comparison, sensitivity analysis, authentication,
 collaboration, and capacity resources remain outside the milestone. The successful
 simulation response is rendered from the backend payload but is not represented by a
 generated OpenAPI TypeScript package; the small hand-written result types are kept

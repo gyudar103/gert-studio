@@ -2,12 +2,23 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: development
     ports:
       - "5173:5173"
     environment:
       API_TARGET: http://backend:8000
     depends_on:
       - backend
+
+  frontend-tests:
+    profiles: [test]
+    build:
+      context: ./frontend
+      target: browser-tests
+    environment:
+      E2E_BASE_URL: http://frontend:5173
+    depends_on:
+      - frontend
 
   backend:
     build:
