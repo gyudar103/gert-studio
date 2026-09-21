@@ -3,6 +3,7 @@ import {demoWorkspace} from '../src/demo';
 
 test('load demo → validate → simulate → export/import → reproduce results',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  let simulationRequests=0;page.on('request',request=>{if(request.url().endsWith('/api/simulate')) simulationRequests++;});
   await page.goto('/');
   await page.getByRole('button',{name:'Load demo',exact:true}).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(11);
@@ -15,6 +16,16 @@ test('load demo → validate → simulate → export/import → reproduce result
   await expect(page.getByRole('heading',{name:'Completion time · terminal runs only'})).toBeVisible();
   await expect(page.getByText('100 realizations',{exact:true})).toBeVisible();
   await expect(page.getByText('20260914',{exact:true})).toBeVisible();
+  const fullMean=JSON.parse(original).summary.terminal_duration.mean;
+  const compactMean=String(Number(Number(fullMean).toPrecision(3)));
+  const mean=page.locator('.metrics > div').filter({has:page.getByText('MEAN',{exact:true})}).getByRole('button');
+  await expect(mean).toHaveText(compactMean);
+  for(let i=0;i<3;i++) {
+    await mean.click();await expect(mean).toHaveText(fullMean);await expect(mean).toHaveAttribute('aria-pressed','true');
+    await mean.click();await expect(mean).toHaveText(compactMean);await expect(mean).toHaveAttribute('aria-pressed','false');
+  }
+  expect(simulationRequests).toBe(1);
+  await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
   const downloadEvent=page.waitForEvent('download');
   await page.getByRole('button',{name:'Export JSON',exact:true}).click();
   const download=await downloadEvent;
@@ -93,4 +104,42 @@ test('constructs a deterministic network through forms and canvas connections',a
   await page.getByRole('button',{name:'Run Simulation',exact:true}).click();
   await expect(page.getByText('3 realizations',{exact:true})).toBeVisible();
   await expect(page.locator('.metrics').getByText('0.3',{exact:true})).toHaveCount(7);
+});
+
+
+test('drag is one undo action and probability edits undo atomically',async({page})=>{
+  await page.goto('/');await page.getByRole('button',{name:'Load demo',exact:true}).click();
+  const card=page.locator('.react-flow__node').first();
+  const before=await card.getAttribute('style');
+  const box=await card.boundingBox();
+  await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height/2);
+  await page.mouse.down();await page.mouse.move(box!.x+box!.width/2+80,box!.y+box!.height/2+40,{steps:8});await page.mouse.up();
+  await expect(card).not.toHaveAttribute('style',before!);
+  await page.keyboard.press('Control+z');await expect(card).toHaveAttribute('style',before!);
+  await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
+  await page.getByRole('navigation',{name:'Network outline'}).getByRole('button',{name:/Test prototype/}).click();
+  await page.getByLabel('Probability',{exact:false}).first().fill('0.6');
+  await expect(page.getByLabel('Probability',{exact:false}).nth(1)).toHaveValue('0.3');
+  await page.keyboard.press('Control+z');
+  await page.getByRole('navigation',{name:'Network outline'}).getByRole('button',{name:/Test prototype/}).click();
+  await expect(page.getByLabel('Probability',{exact:false}).first()).toHaveValue('0.8');
+});
+
+
+test('Cmd+Z restores an activity drag and sequential model edits',async({page})=>{
+  await page.goto('/');await page.getByRole('button',{name:'Load demo',exact:true}).click();
+  const card=page.locator('.react-flow__node[data-id="a:0"]');
+  const before=await card.getAttribute('style');
+  const box=(await card.boundingBox())!;
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  await page.mouse.down();await page.mouse.move(box.x+box.width/2+60,box.y+box.height/2+30,{steps:8});await page.mouse.up();
+  await expect(card).not.toHaveAttribute('style',before!);
+  await page.keyboard.press('Meta+z');await expect(card).toHaveAttribute('style',before!);
+  await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'+ State',exact:true}).click();
+  await page.getByRole('button',{name:'+ Activity',exact:true}).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(13);
+  await page.keyboard.press('Meta+z');await expect(page.locator('.react-flow__node')).toHaveCount(12);
+  await page.keyboard.press('Meta+z');await expect(page.locator('.react-flow__node')).toHaveCount(11);
+  await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
 });

@@ -1,6 +1,7 @@
 import {useEffect} from 'react';
 import type {Activity, Duration, GertNode, Item, Model, Selection} from '../types';
 import {blankDuration,blankOutcome,freshId,probabilityTotal} from '../model';
+import {adjustProbability} from '../probabilities';
 import {Field,QuantityEditor,SelectField} from './Fields';
 interface Props {model:Model; selection:Selection; updateNode:(index:number,node:GertNode)=>void; updateActivity:(index:number,activity:Activity)=>void; updateItem:(index:number,item:Item)=>void; remove:()=>void}
 export default function Properties({model,selection,updateNode,updateActivity,updateItem,remove}:Props) {
@@ -42,14 +43,14 @@ export default function Properties({model,selection,updateNode,updateActivity,up
           <small>Changing distribution clears its parameters. Enter all required values.</small>
         </fieldset>
         <div className="section-heading"><h3>Outcomes</h3><span>{activity.outcomes.length} branches</span></div>
-        <div className="probability-total" role="status">Probability total: <strong>{probabilityTotal(activity.outcomes)}</strong><small>Declared values · never normalized. Backend validation checks the 1e-14 tolerance.</small></div>
+        <div className="probability-total" role="status">Probability total: <strong>{probabilityTotal(activity.outcomes)}</strong><small>Editing a probability proportionally adjusts other valid probabilities in this activity. A single outcome stays at 1. Correct incomplete or invalid values first. Backend validation is unchanged.</small></div>
         <p className="hint">One outcome is selected per completed execution of this activity.</p>
         {activity.outcomes.map((o,oi)=>{
           const change=(updated:typeof o)=>updateActivity(index,{...activity,outcomes:activity.outcomes.map((old,i)=>i===oi?updated:old)});
           return <fieldset className={selection.outcome===oi?'outcome focused':'outcome'} key={oi} id={`outcome-editor-${oi}`}><legend>Outcome {oi+1}</legend>
             <Field label="Outcome ID" required value={o.id} onChange={id=>change({...o,id})}/>
             <Field label="Branch label" value={o.label} onChange={label=>change({...o,label})}/>
-            <Field label="Probability" required value={o.probability} onChange={probability=>change({...o,probability})}/>
+            <Field label="Probability" required value={o.probability} onChange={probability=>updateActivity(index,{...activity,outcomes:adjustProbability(activity.outcomes,oi,probability)})}/>
             <SelectField label="Target node" required value={o.target_node} options={model.nodes} onChange={target_node=>change({...o,target_node})}/>
             <QuantityEditor title="Produced items" value={o.produced_items} items={model.item_types} onChange={produced_items=>change({...o,produced_items})}/>
             <button className="danger subtle" onClick={()=>updateActivity(index,{...activity,outcomes:activity.outcomes.filter((_,i)=>i!==oi)})}>Remove outcome {oi+1}</button>

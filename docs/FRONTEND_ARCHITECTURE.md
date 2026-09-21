@@ -24,8 +24,8 @@ connections and does not apply a DAG or cycle-prevention policy.
 
 Quantity, probability, duration, and simulation-time text inputs remain strings from
 editing through request construction. The UI displays a probability total with
-`bignumber.js` for feedback only; it never writes a normalized or rounded value back
-to an outcome. The API adapter uses `json-bigint` with native `BigInt` so large
+`bignumber.js`. Manual probability edits use the explicitly requested sibling
+adjustment described below; displaying totals does not modify outcomes. The API adapter uses `json-bigint` with native `BigInt` so large
 integer seeds and limits are not coerced through JavaScript `Number`. Empty required
 numeric fields remain empty and are rejected by the backend; there are no frontend
 numeric defaults. `simulationBody` emits decimal strings and integer JSON tokens while
@@ -107,7 +107,7 @@ starts blank so a user can construct an invalid intermediate state and use backe
 validation to understand it; loading the demo is the first manual end-to-end path.
 
 Vitest tests cover rendering, node and item creation, editing, distribution switching,
-required lambda, probability display without normalization, exact request serialization,
+required lambda, probability adjustment during manual editing, exact request serialization,
 diagnostic navigation, duplicate-request locking, cycles, model/UI separation, and
 conditioned status/lifecycle result rendering. Browser verification exercises the
 real canvas and backend: load demo, validate, run 100 realizations, and inspect
@@ -123,3 +123,31 @@ collaboration, and capacity resources remain outside the milestone. The successf
 simulation response is rendered from the backend payload but is not represented by a
 generated OpenAPI TypeScript package; the small hand-written result types are kept
 close to the UI until a public schema-generation decision is made.
+
+
+## Editing and result presentation
+
+`useWorkspaceHistory.ts` retains immutable model/layout snapshots around existing
+React state updates. Adding/deleting elements includes their layout changes in one
+entry; a canvas drag is a transaction. Undo restores the preceding snapshot and
+clears selection and stale analysis. Ctrl+Z and Cmd+Z apply when history exists and
+the editor is not busy; simulation settings keep native text undo. New, demo, and
+successful import start a fresh history. Intermediate form drafts remain editable
+and can be restored by undo; history does not claim backend validity for unfinished
+models. Field change events are individual history entries.
+
+As explicitly requested for frontend editing, `adjustProbability` redistributes
+only sibling outcomes in the same activity when a probability is edited. It uses
+decimal arithmetic, proportional weights, equal allocation for all-zero siblings,
+and final residual closure so stored decimal strings total exactly one. A lone
+valid outcome becomes one. Invalid/incomplete edited or sibling values remain for
+correction and backend validation. Import and validation never normalize values;
+backend sampling and probability semantics are unchanged. This editing convenience
+is disclosed next to the probability total.
+
+`ResultNumber` uses decimal half-up rounding to three significant digits and local
+presentation state to toggle the exact received string/integer. All aggregate
+metrics and counts use it; seed and version identifiers stay exact. It never mutates
+results or sends a request. Unit tests cover formatting, independent repeated
+toggling, probability closure and edge cases, and workspace history; browser tests
+cover actual drag and keyboard undo.

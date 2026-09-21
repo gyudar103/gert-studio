@@ -1,16 +1,17 @@
-import {useRef,useState} from 'react';
-import type {Activity,Diagnostic,GertNode,Item,Model,Selection,SettingsForm,SimulationResult,ValidationReport,Workspace} from './types';
+import {useEffect,useRef,useState} from 'react';
+import type {Activity,Diagnostic,GertNode,Item,Model,Selection,SettingsForm,SimulationResult,ValidationReport} from './types';
 import {apiModel,diagnosticSelection,emptySettings,emptyWorkspace,freshId,newActivity,newNode} from './model';
 import {ApiError,runSimulation,validateModel} from './api';
 import {demoSettings,demoWorkspace} from './demo';
 import {downloadModel,importModel} from './files';
+import {useWorkspaceHistory} from './useWorkspaceHistory';
 import Canvas from './components/Canvas';
 import Properties from './components/Properties';
 import {Field} from './components/Fields';
 import {Diagnostics,Results} from './components/Analysis';
 
 export default function App() {
-  const [workspace,setWorkspace]=useState<Workspace>(emptyWorkspace);
+  const {workspace,setWorkspace,begin,end,undo:restore,reset,canUndo}=useWorkspaceHistory(emptyWorkspace);
   const [settings,setSettings]=useState<SettingsForm>(emptySettings);
   const [selection,setSelection]=useState<Selection>(null);
   const [report,setReport]=useState<ValidationReport>();
@@ -24,6 +25,19 @@ export default function App() {
   const [canvasVersion,setCanvasVersion]=useState(0);
   const [focus,setFocus]=useState(0);
   const model=workspace.model;
+  function undo() {
+    if(lock.current || !restore()) return;
+    setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);
+  }
+  useEffect(()=>{
+    const listener=(event:KeyboardEvent)=>{
+      const target=event.target;
+      if(target instanceof Element && target.closest('.settings')) return;
+      if(event.defaultPrevented || event.altKey || event.shiftKey || !(event.ctrlKey||event.metaKey) || event.key.toLowerCase()!=='z' || lock.current || !canUndo) return;
+      event.preventDefault();undo();
+    };
+    window.addEventListener('keydown',listener);return ()=>window.removeEventListener('keydown',listener);
+  });
   function changeModel(update:(m:Model)=>Model) {
     setImportDiagnostics(false);
     setWorkspace(w=>({...w,model:update(w.model)}));setReport(undefined);setResult(undefined);setError('');
@@ -31,14 +45,14 @@ export default function App() {
   function addNode(type:GertNode['type']) {
     const id=freshId(type,model.nodes), index=model.nodes.length;
     changeModel(m=>({...m,nodes:[...m.nodes,newNode(type,id)]}));
-    setWorkspace(w=>({...w,layout:{...w.layout,nodes:[...w.layout.nodes,{x:80+(index%3)*320,y:100+Math.floor(index/3)*190}]}}));setSelection({kind:'node',index});
+    setWorkspace(w=>({...w,layout:{...w.layout,nodes:[...w.layout.nodes,{x:80+(index%3)*320,y:100+Math.floor(index/3)*190}]}}),false);setSelection({kind:'node',index});
   }
   function addActivity(source='',target='') {
     if(lock.current) return;
     const index=model.activities.length;
     changeModel(m=>({...m,activities:[...m.activities,newActivity(freshId('activity',m.activities),source,target)]}));
     const sourceIndex=model.nodes.findIndex(n=>n.id===source),point=workspace.layout.nodes[sourceIndex]||{x:0,y:index*160};
-    setWorkspace(w=>({...w,layout:{...w.layout,activities:[...w.layout.activities,{x:point.x+230,y:point.y+90}]}}));setSelection({kind:'activity',index});
+    setWorkspace(w=>({...w,layout:{...w.layout,activities:[...w.layout.activities,{x:point.x+230,y:point.y+90}]}}),false);setSelection({kind:'activity',index});
   }
   function updateNode(index:number,node:GertNode) {
     const old=model.nodes[index].id;
@@ -56,12 +70,12 @@ export default function App() {
     if(!selection) return;
     const {kind,index}=selection;
     changeModel(m=>({...m,nodes:kind==='node'?m.nodes.filter((_,i)=>i!==index):m.nodes,activities:kind==='activity'?m.activities.filter((_,i)=>i!==index):m.activities,item_types:kind==='item'?m.item_types.filter((_,i)=>i!==index):m.item_types}));
-    if(kind!=='item') setWorkspace(w=>({...w,layout:{...w.layout,[kind==='node'?'nodes':'activities']:w.layout[kind==='node'?'nodes':'activities'].filter((_,i)=>i!==index)}}));
+    if(kind!=='item') setWorkspace(w=>({...w,layout:{...w.layout,[kind==='node'?'nodes':'activities']:w.layout[kind==='node'?'nodes':'activities'].filter((_,i)=>i!==index)}}),false);
     setSelection(null);
   }
   function replace(demo:boolean) {
     if((model.nodes.length||model.activities.length||model.item_types.length) && !window.confirm('Replace the current network? Unsaved edits will be lost.')) return;
-    setWorkspace(demo?demoWorkspace():emptyWorkspace());setSettings(demo?{...demoSettings}:emptySettings());setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);setCanvasVersion(v=>v+1);
+    reset(demo?demoWorkspace():emptyWorkspace());setSettings(demo?{...demoSettings}:emptySettings());setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);setCanvasVersion(v=>v+1);
   }
   async function submit(kind:'validate'|'simulate') {
     if(lock.current) return;
@@ -78,7 +92,7 @@ export default function App() {
     try {
       const imported=await importModel(await file.text());
       if((model.nodes.length||model.activities.length||model.item_types.length) && !window.confirm('Replace the current network with this validated file? Export first to keep your edits.')) return;
-      setWorkspace(imported.workspace);setSelection(null);setResult(undefined);
+      reset(imported.workspace);setSelection(null);setResult(undefined);
       setReport(imported.report);setImportDiagnostics(false);setTab('validation');setCanvasVersion(v=>v+1);
     } catch(e) {
       setError(e instanceof Error?e.message:'Could not read the file. Your current model is unchanged.');
@@ -87,7 +101,7 @@ export default function App() {
   }
   function selectDiagnostic(d:Diagnostic) {const selected=diagnosticSelection(model,d.path,d.element_id);if(selected){setSelection(selected);setFocus(f=>f+1);}}
   return <div className="app">
-    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><span className="version">v0.1 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><button disabled={!!busy||!canUndo} onClick={undo} title="Undo (Ctrl+Z / Cmd+Z)">Undo</button><span className="version">v0.1 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
     {error && <div role="alert" className="error-banner">{error}<button aria-label="Dismiss message" onClick={()=>setError('')}>×</button></div>}
     <main className="workspace">
       <fieldset className="editor-shell" disabled={!!busy}><aside className="sidebar" aria-label="Model and items">
@@ -111,7 +125,7 @@ export default function App() {
           </details>
         </div></aside></fieldset>
       <section className="canvas-panel" aria-label="Network canvas"><div className="canvas-toolbar"><div><strong>{model.project.name||'Untitled network'}</strong><small>Connect node handles to create activities</small></div><div className="creation-actions"><button disabled={!!busy} onClick={()=>addNode('start')}>+ Start</button><button disabled={!!busy} onClick={()=>addNode('state')}>+ State</button><button disabled={!!busy} onClick={()=>addNode('terminal')}>+ Terminal</button><button disabled={!!busy} onClick={()=>addActivity(selection?.kind==='node'?model.nodes[selection.index].id:'')}>+ Activity</button></div></div>
-        <div className="canvas-area"><Canvas key={canvasVersion} workspace={workspace} selection={selection} focus={focus} select={setSelection} connect={addActivity} move={(kind,index,point)=>setWorkspace(w=>({...w,layout:{...w.layout,[kind]:w.layout[kind].map((p,i)=>i===index?point:p)}}))}/>
+        <div className="canvas-area"><Canvas key={canvasVersion} workspace={workspace} selection={selection} focus={focus} select={setSelection} connect={addActivity} beginMove={begin} endMove={end} move={(kind,index,point)=>setWorkspace(w=>({...w,layout:{...w.layout,[kind]:w.layout[kind].map((p,i)=>i===index?point:p)}}))}/>
           {!model.nodes.length && <div className="canvas-empty"><span>YOUR NEXT PROJECT</span><h2>A network of possibilities.</h2><p>Add a Start node and define its items.<br/>Connect activities, then explore what happens.</p><button onClick={()=>replace(true)}>Explore the prototype demo →</button></div>}
           {busy && <div className="busy-overlay" role="status">{busy==='simulate'?'Simulating… results will appear when all realizations finish.':'Validating with the backend…'}</div>}
         </div><div className="canvas-legend"><span>● Start</span><span>■ State</span><span>◎ Terminal</span><span>▰ Activity → outcome branches</span><span>Drag to arrange · Scroll to zoom</span></div>

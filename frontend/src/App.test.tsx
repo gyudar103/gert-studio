@@ -27,10 +27,13 @@ describe('modeling workspace',()=>{
     expect(screen.getByLabelText(/lambda/)).toBeRequired();expect(screen.getByLabelText(/lambda/)).toHaveValue('');expect(screen.queryByLabelText(/^value/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Distribution/),{target:{value:'uniform'}});expect(screen.queryByLabelText(/lambda/)).not.toBeInTheDocument();expect(screen.getByLabelText(/^min/)).toHaveValue('');
   });
-  it('shows exact probability totals and does not normalize edits',()=>{
+  it('adjusts sibling probabilities and undoes the entire change',()=>{
     demo();fireEvent.click(within(screen.getByRole('navigation',{name:'Network outline'})).getByRole('button',{name:/Test prototype/}));
     fireEvent.change(screen.getAllByLabelText(/Probability/)[0],{target:{value:'0.7'}});
-    expect(screen.getByText('0.9',{exact:true})).toBeVisible();expect(screen.getAllByLabelText(/Probability/).map(e=>(e as HTMLInputElement).value)).toEqual(['0.7','0.15','0.05']);
+    expect(screen.getAllByLabelText(/Probability/).map(e=>(e as HTMLInputElement).value)).toEqual(['0.7','0.225','0.075']);
+    fireEvent.keyDown(window,{key:'z',ctrlKey:true});
+    fireEvent.click(within(screen.getByRole('navigation',{name:'Network outline'})).getByRole('button',{name:/Test prototype/}));
+    expect(screen.getAllByLabelText(/Probability/).map(e=>(e as HTMLInputElement).value)).toEqual(['0.8','0.15','0.05']);
   });
   it('renders server errors/warnings/info and navigates the affected property',async()=>{
     fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>JSON.stringify({valid:false,diagnostics:[{severity:'error',code:'probability_sum',message:'Probabilities do not total one',path:['activities',3,'outcomes']},{severity:'warning',code:'possible_cycle',message:'Cycle may repeat',path:['nodes',3]},{severity:'info',code:'note',message:'Model note',path:[]}]})});
@@ -58,6 +61,71 @@ describe('modeling workspace',()=>{
 });
 it('renders conditioned results, separate statuses, lifecycle and the exact returned seed',()=>{
   const f={count:1,denominator:2,probability:'0.5'};
-  const result:SimulationResult={root_seed:340282366920938463463374607431768211455n,engine_version:'0.1.0',reproducibility_version:'test',validation:{valid:true,diagnostics:[]},runs:[],summary:{realizations:2,statuses:{terminal:f,cutoff_time:f},terminal_outcomes:{success:{...f,outcome_code:'success'}},terminal_duration:{sample_size:1,conditioning:'terminal only',mean:'3',median:'3',p50:'3',p80:'3',p90:'3',p95:'3',min:'3',max:'3'},activities:{test:{mean_starts:'1',probability_at_least_one_start:'1',started:2,completed:1,cancelled:0,unfinished_at_run_end:1,unfinished_at_cutoff:1,unfinished_at_ambiguity:0,unfinished_at_invalid_runtime:0}}}};
+  const result:SimulationResult={root_seed:340282366920938463463374607431768211455n,engine_version:'0.1.0',reproducibility_version:'test',validation:{valid:true,diagnostics:[]},runs:[],summary:{realizations:2,statuses:{terminal:f,cutoff_time:f},terminal_outcomes:{success:{...f,outcome_code:'success'}},terminal_duration:{sample_size:1,conditioning:'terminal only',mean:'18.341252780000000000000001',median:'3',p50:'3',p80:'3',p90:'3',p95:'3',min:'3',max:'3'},activities:{test:{mean_starts:'1',probability_at_least_one_start:'1',started:2,completed:1,cancelled:0,unfinished_at_run_end:1,unfinished_at_cutoff:1,unfinished_at_ambiguity:0,unfinished_at_invalid_runtime:0}}}};
+    const before=structuredClone(result);
+    Object.freeze(result.summary.terminal_duration);
     render(<Results result={result} model={demoWorkspace().model}/>);expect(screen.getByText(/Completion time · terminal runs only/)).toBeVisible();expect(screen.getByText('Time cutoff')).toBeVisible();expect(screen.getByText('340282366920938463463374607431768211455')).toBeVisible();expect(screen.getByRole('columnheader',{name:'Unfinished'})).toBeVisible();
+    const mean=screen.getByRole('button',{name:'18.3'});
+    for(let i=0;i<3;i++) {
+      fireEvent.click(mean);expect(mean.textContent?.trim()).toBe(before.summary.terminal_duration.mean);
+      fireEvent.click(mean);expect(mean.textContent?.trim()).toBe('18.3');
+    }
+    expect(result).toEqual(before);expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it('undoes model edits in order and leaves unavailable shortcuts alone',()=>{
+  render(<App/>);
+  expect(fireEvent.keyDown(window,{key:'z',ctrlKey:true})).toBe(true);
+  click('+ Start');click('+ State');
+  fireEvent.change(screen.getByLabelText('Node label'),{target:{value:'Changed'}});
+  fireEvent.keyDown(window,{key:'z',ctrlKey:true});
+  const outline=within(screen.getByRole('navigation',{name:'Network outline'}));
+  expect(outline.queryByText('Changed')).not.toBeInTheDocument();
+  fireEvent.keyDown(window,{key:'z',ctrlKey:true});
+  expect(outline.queryByRole('button',{name:/state_1/})).not.toBeInTheDocument();
+  click('Undo');expect(outline.queryByRole('button')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Undo'})).toBeDisabled();
+});
+it('undo restores deleted activities and their full properties',()=>{
+  demo();fireEvent.click(within(screen.getByRole('navigation',{name:'Network outline'})).getByRole('button',{name:/Test prototype/}));
+  click('Delete activity');fireEvent.keyDown(window,{key:'z',metaKey:true});
+  fireEvent.click(within(screen.getByRole('navigation',{name:'Network outline'})).getByRole('button',{name:/Test prototype/}));
+  expect(screen.getByLabelText(/Activity ID/)).toHaveValue('test');
+  expect(screen.getAllByLabelText(/Probability/)).toHaveLength(3);
+});
+
+it('restores exact quantities, distribution parameters and renamed references in the API model',async()=>{
+  fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>'{"valid":true,"diagnostics":[]}'});
+  demo();
+  const outline=within(screen.getByRole('navigation',{name:'Network outline'}));
+  fireEvent.click(outline.getByRole('button',{name:/Mechanical design/}));
+  const quantity=within(screen.getByRole('group',{name:'Requirements'})).getByLabelText(/Quantity 1/);
+  fireEvent.change(quantity,{target:{value:'0.1000000000000000000001'}});
+  fireEvent.change(screen.getByLabelText(/Distribution/),{target:{value:'fixed'}});
+  fireEvent.change(screen.getByLabelText(/^value/),{target:{value:'18.34125278'}});
+  fireEvent.click(outline.getByRole('button',{name:/Project start/}));
+  fireEvent.change(screen.getByLabelText(/Node ID/),{target:{value:'renamed_start'}});
+  for(let i=0;i<4;i++) fireEvent.keyDown(window,{key:'z',ctrlKey:true});
+  expect(screen.getByRole('button',{name:'Undo'})).toBeDisabled();
+  click('Validate');
+  await screen.findByText('Model valid');
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(demoWorkspace().model);
+});
+
+it('leaves settings and modified shortcuts native and prevents undo while busy',async()=>{
+  let finish!:(value:unknown)=>void;
+  fetchMock.mockReturnValue(new Promise(resolve=>{finish=resolve;}));
+  demo();fireEvent.change(screen.getByLabelText('Project name'),{target:{value:'Changed'}});
+  expect(fireEvent.keyDown(screen.getByLabelText(/Realizations/),{key:'z',ctrlKey:true})).toBe(true);
+  expect(fireEvent.keyDown(window,{key:'z',ctrlKey:true,shiftKey:true})).toBe(true);
+  expect(fireEvent.keyDown(window,{key:'z',ctrlKey:true,altKey:true})).toBe(true);
+  expect(screen.getByLabelText('Project name')).toHaveValue('Changed');
+  click('Validate');
+  expect(screen.getByRole('button',{name:'Undo'})).toBeDisabled();
+  expect(fireEvent.keyDown(window,{key:'z',metaKey:true})).toBe(true);
+  finish({ok:true,status:200,text:async()=>'{"valid":true,"diagnostics":[]}'});
+  await screen.findByText('Model valid');
+  fireEvent.keyDown(window,{key:'z',metaKey:true});
+  expect(screen.getByLabelText('Project name')).toHaveValue(demoWorkspace().model.project.name);
+  expect(screen.queryByText('Model valid')).not.toBeInTheDocument();
 });
