@@ -9,6 +9,8 @@ Those specifications remain unchanged. The engine has no FastAPI dependency.
 - app/validation/: structured errors and conservative graph/item warnings.
 - app/engine/numbers.py: exact terminating-decimal serialization and aggregate ratio formatting.
 - app/engine/randomness.py: independently keyed random streams and distribution sampling.
+- app/engine/beta.py: versioned gamma-ratio Beta sampler for PERT shapes.
+- app/engine/binary64.py: platform-independent, correctly rounded log/exp/sqrt primitives.
 - app/engine/simulation.py: one realization, inventories, lifecycle records and event queue.
 - app/engine/service.py: validation, seed generation and ordered Monte Carlo orchestration.
 - app/reporting/: status/outcome counts, conditional duration statistics, lifecycle aggregation.
@@ -55,8 +57,8 @@ integer-based terminating-decimal formatter, not a bounded-precision division.
 
 ## Reproducibility and distributions
 
-Engine version: 0.1.0.
-Reproducibility version: gert-v1-py312-sha256-mt19937.
+Engine version: 0.1.1.
+Reproducibility version: gert-v2-py312-sha256-mt19937-crmath1.
 
 For each draw purpose, UTF-8-compatible ASCII JSON encoding (ensure_ascii=True,
 compact separators) of this typed list is hashed with SHA-256:
@@ -73,19 +75,46 @@ Unicode normalization. Changing a mathematical ID may change draws.
 
 - Fixed and all valid equal-endpoint distributions return the exact input duration.
 - Uniform: exact rational scaling of the dyadic value returned by random().
-- Triangular: inverse CDF on normalized [0,1], math.sqrt, then Decimal(repr(value))
+- Triangular: inverse CDF on normalized [0,1], controlled binary64 sqrt, then Decimal(repr(value))
   converted to Fraction and scaled by the exact input range.
 - Beta-PERT: alpha/beta are calculated from exact input fractions, converted to
-  binary64 for Python random.betavariate, using Python 3.12's gamma-based algorithm.
+  binary64 for GERT's gamma-ratio sampler. It preserves Python 3.12's Cheng gamma
+  rejection equations, operation order, proposal bounds and shape-one exponential
+  case, replacing native log/exp/sqrt with the controlled binary64 primitives.
   The normalized sample is deterministically converted via Decimal(repr(value))
   before exact range scaling and scheduling.
 - Outcomes: canonical outcome-ID order, exact cumulative declared intervals,
   final residual closing to one after validation. No normalization or mutation.
 
-These numerical algorithms and conversions are part of the reproducibility version.
-Changing Python's sampling implementation or math behavior requires compatibility
-verification and potentially a new reproducibility version. Very large finite
-beta shape inputs can exceed the numerical sampler's range; this is reported as
+The controlled primitives convert each binary64 argument exactly to Decimal.
+A fresh, explicit ROUND_HALF_EVEN context starts at 40 significant digits and
+evaluates correctly rounded ln, exp or sqrt. An exact answer converts directly.
+Otherwise its adjacent decimal numbers enclose the real answer. The primitive
+returns a binary64 value only if both bounds convert to that same value; if not,
+it doubles working precision and repeats. This establishes nearest-even binary64
+rounding without relying on native libm or a fixed guard-digit assumption. Caller
+Decimal contexts, flags and traps do not enter the calculation. No output rounding,
+timestamp coalescing or formatting change is involved.
+
+The supported numerical contract is CPython 3.12 on IEEE-754 binary64 Windows x64
+and Linux x86-64, with nearest-even basic float arithmetic/conversion and conforming
+Decimal correctly rounded ln/exp/sqrt. The primitives use only the finite domains
+needed by the samplers. Their context explicitly sets precision, rounding, exponent
+bounds (-999999 to 999999), flags, traps, capitals and clamp. These are numerical
+algorithm settings, not model parameters or hidden distribution defaults.
+
+These algorithms and conversions are part of the reproducibility version. V1 used
+native math and experimentally differed between Windows and Linux. V2 cannot
+preserve both conflicting results. Because the version already occupies the first
+RNG key field, this version bump changes all stochastic streams (including outcome,
+uniform and triangular streams), not just Beta-PERT. Key structure, root seed and
+stream independence are unchanged. Responses identify the new versions. The API
+does not select legacy engines; historical v1 replay requires the original engine
+and environment. Do not relabel old results as v2. Future Python/runtime changes
+require compatibility verification against the exact reference vectors and complete
+cross-platform corpus; changed numerical behavior needs a new version.
+
+Very large finite beta shape inputs can exceed the numerical sampler's range; this is reported as
 invalid_runtime_state rather than silently changing parameters. The guard also checks
 the gamma algorithm's intermediate 2 * shape for finite binary64 representation before
 entering its rejection loop, where overflow would otherwise prevent termination.

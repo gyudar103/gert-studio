@@ -1,0 +1,143 @@
+{
+  "purpose": "duration",
+  "activity_id": "test",
+  "seed": 20260914,
+  "parameters": {
+    "type": "beta-PERT",
+    "min": "1",
+    "mode": "2",
+    "max": "4",
+    "lambda": "4"
+  },
+  "alpha_hex": "0x1.2aaaaaaaaaaabp+1",
+  "beta_hex": "0x1.d555555555555p+1",
+  "environments": {
+    "windows": {
+      "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+      "implementation": "CPython",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "machine": "AMD64",
+      "compiler": "MSC v.1944 64 bit (AMD64)",
+      "libc": [
+        "",
+        ""
+      ],
+      "decimal": "Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999, capitals=1, clamp=0, flags=[], traps=[InvalidOperation, DivisionByZero, Overflow])",
+      "libmpdec": "2.5.1",
+      "dependencies": {
+        "pydantic": "2.13.5",
+        "fastapi": "0.141.1"
+      },
+      "numpy_scipy_used": false
+    },
+    "linux": {
+      "python": "3.12.14 (main, Sep 19 2026, 01:05:48) [GCC 12.2.0]",
+      "implementation": "CPython",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+      "machine": "x86_64",
+      "compiler": "GCC 12.2.0",
+      "libc": [
+        "glibc",
+        "2.36"
+      ],
+      "decimal": "Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999, capitals=1, clamp=0, flags=[], traps=[InvalidOperation, DivisionByZero, Overflow])",
+      "libmpdec": "2.5.1",
+      "dependencies": {
+        "pydantic": "2.13.5",
+        "fastapi": "0.141.1"
+      },
+      "numpy_scipy_used": false
+    }
+  },
+  "stdlib_source_sha256": "31285194f36a139a6dcc66afa93153e0861f2db17e47511c5f8774ae122cfcd6",
+  "vectors": [
+    {
+      "realization": 30,
+      "ordinal": 0,
+      "key": "[\"gert-v1-py312-sha256-mt19937\",\"20260914\",30,\"test\",0,\"duration\"]",
+      "sha256": "90f1f280858a5b3dd56bdec2752196f54dd6974aed9c721c37b7fd096a09799e",
+      "raw_draws": [
+        "0x1.5c50bf50b16b0p-4",
+        "0x1.232b83c7ec2aep-1",
+        "0x1.368c470fc5da2p-1",
+        "0x1.3e68a1df2a2acp-3"
+      ],
+      "first_divergence": {
+        "windows": [
+          "_exp",
+          "0x1.6032eaf638ba6p-3",
+          "0x1.30097bfadd80ap+0"
+        ],
+        "linux": [
+          "_exp",
+          "0x1.6032eaf638ba6p-3",
+          "0x1.30097bfadd80bp+0"
+        ]
+      },
+      "legacy_windows_duration": "1.40247878168246881",
+      "legacy_linux_duration": "1.40247878168246872",
+      "corrected_normalized_hex": "0x1.12c243e1c2a59p-3",
+      "corrected_duration": "1.40247878168246872"
+    },
+    {
+      "realization": 44,
+      "ordinal": 2,
+      "key": "[\"gert-v1-py312-sha256-mt19937\",\"20260914\",44,\"test\",2,\"duration\"]",
+      "sha256": "61646a9cb1f5389149444a8f93e873b23520da21e5fd30242ae4e1a91e3b4b77",
+      "raw_draws": [
+        "0x1.b6fa51fe635c0p-7",
+        "0x1.ee670073601b8p-3",
+        "0x1.331ebbf224c3bp-1",
+        "0x1.143a39a7fb3ccp-1"
+      ],
+      "first_divergence": {
+        "windows": [
+          "_exp",
+          "0x1.496f64590e281p-3",
+          "0x1.2cad255018e54p+0"
+        ],
+        "linux": [
+          "_exp",
+          "0x1.496f64590e281p-3",
+          "0x1.2cad255018e55p+0"
+        ]
+      },
+      "legacy_windows_duration": "1.16279798470297099",
+      "legacy_linux_duration": "1.16279798470297096",
+      "corrected_normalized_hex": "0x1.bc8c0a2c4f1a8p-5",
+      "corrected_duration": "1.16279798470297096"
+    },
+    {
+      "realization": 48,
+      "ordinal": 0,
+      "key": "[\"gert-v1-py312-sha256-mt19937\",\"20260914\",48,\"test\",0,\"duration\"]",
+      "sha256": "2a7ddb17d7a633de76c4986463532e9f0f55d7338c4ecf983fbcc4abeb64419a",
+      "raw_draws": [
+        "0x1.7f64ec41eadb4p-1",
+        "0x1.40ef6d9261c00p-7",
+        "0x1.bb84d6e589780p-2",
+        "0x1.ed8d31719a960p-6",
+        "0x1.d1e2ab1bb8d0bp-1",
+        "0x1.8d5a434f0f0bep-2",
+        "0x1.209787a0fc817p-1",
+        "0x1.213b467d410b8p-3"
+      ],
+      "first_divergence": {
+        "windows": [
+          "_exp",
+          "-0x1.1fd44faec8190p-3",
+          "0x1.bcded11a5c728p-1"
+        ],
+        "linux": [
+          "_exp",
+          "-0x1.1fd44faec8190p-3",
+          "0x1.bcded11a5c727p-1"
+        ]
+      },
+      "legacy_windows_duration": "1.9992607505708026",
+      "legacy_linux_duration": "1.99926075057080245",
+      "corrected_normalized_hex": "0x1.5514bc9a81070p-2",
+      "corrected_duration": "1.99926075057080245"
+    }
+  ]
+}
