@@ -1,5 +1,10 @@
 # Documentation and incomplete drafts: independent review handoff
 
+> Follow-up: [Independent verification report](INDEPENDENT_REVIEW.md) records the
+> subsequent source review, clean Linux Docker suites, and Windows/Linux corpus
+> comparison. The Docker limitations below describe the historical handoff run;
+> they were resolved in the follow-up verification. Implementation code is unchanged.
+
 Report date: 2026-10-01 (Asia/Jerusalem). This report describes local work only.
 Nothing was pushed to GitHub. The implementation is committed on
 `codex/model-documentation-and-placeholders`, separate from `main`.
