@@ -5,7 +5,6 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
-.venv-windows/
 venv/
 env/
 .env/

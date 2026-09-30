@@ -32,13 +32,6 @@ exact text. Layout is regenerated on import; simulation settings stay separate.
 Export before refreshing: there is no database or automatic browser persistence.
 Incomplete drafts can be exported but must pass validation before import.
 
-## Portable Windows distribution
-
-A separate Windows build packages the same frontend and backend for users without
-Python, Node.js or Docker. See [build and user instructions](docs/WINDOWS_DISTRIBUTION.md)
-and the [verification/release status](docs/WINDOWS_VERIFICATION.md).
-Docker remains a supported distribution; its workflow above is unchanged.
-
 ## Verify
 
 With both services running:

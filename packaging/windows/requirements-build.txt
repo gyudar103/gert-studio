@@ -1,4 +1,0 @@
-# Application dependencies remain defined by the shared backend requirements.
--c constraints.txt
--r ../../backend/requirements.txt
-pyinstaller==6.22.3
