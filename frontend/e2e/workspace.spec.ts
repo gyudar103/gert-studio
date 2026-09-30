@@ -96,6 +96,7 @@ test('constructs a deterministic network through forms and canvas connections',a
   await expect(requiredQuantity).toHaveValue('');
   await requiredQuantity.fill('0.1');
   await expect(requiredQuantity).toHaveValue('0.1');
+  await page.getByLabel(/Distribution/).selectOption('fixed');
   await page.getByLabel(/^value/).fill('0.3');
   await page.getByLabel('Probability',{exact:false}).fill('1');
   await page.getByLabel(/^Realizations/).fill('3');await page.getByLabel(/^Seed/).fill('42');

@@ -90,7 +90,7 @@ Each new execution receives a fresh duration sample. User-entered duration param
 
 ## 15. Supported Duration Distributions
 
-Every duration uses an explicit `type` discriminator. Every required numeric parameter must be explicitly supplied; there are no hidden or default numeric distribution parameters. Canonical parameter names are `value` for fixed; `min`, `max` for uniform; `min`, `mode`, `max` for triangular; and `min`, `mode`, `max`, `lambda` for beta-PERT. The UI must clearly expose every required parameter.
+Every simulation-ready duration uses an explicit `type` discriminator. Every required numeric parameter must be explicitly supplied; there are no hidden or default numeric distribution parameters. Drafts may explicitly use `null` as described in Section 54. Canonical parameter names are `value` for fixed; `min`, `max` for uniform; `min`, `mode`, `max` for triangular; and `min`, `mode`, `max`, `lambda` for beta-PERT. The UI must clearly expose every required parameter.
 
 ### Fixed
 
@@ -106,7 +106,7 @@ $$D\sim\operatorname{Triangular}(a,m,b),\qquad0\leq a\leq m\leq b.$$
 
 ### Beta-PERT
 
-Beta-PERT requires explicit user-supplied `min` (a), `mode` (m), `max` (b), and `lambda` ($\lambda$). All parameters must be finite real numbers, with $0\leq a\leq m\leq b$ and $\lambda>0$. There is no numeric default for `lambda`. Incomplete or invalid parameters are validation errors. When $a<b$:
+Beta-PERT requires explicit user-supplied `min` (a), `mode` (m), `max` (b), and `lambda` ($\lambda$). All supplied parameters must be finite real numbers, with $0\leq a\leq m\leq b$ and $\lambda>0$. There is no numeric default for `lambda`. Incomplete parameters block simulation; invalid supplied parameters also invalidate drafts. When $a<b$:
 
 $$\alpha=1+\lambda\frac{m-a}{b-a},\qquad\beta=1+\lambda\frac{b-m}{b-a},$$
 
@@ -317,7 +317,7 @@ Require unique node, activity, and item-type IDs; exactly one Start; valid initi
 
 Node IDs, activity IDs, and item-type IDs must each be unique within the model. Outcome IDs must be unique within their parent activity; canonical outcome identity is (activity_id, outcome_id). Terminal node IDs are authoritative and terminal `outcome_code` values must be unique across terminal nodes; labels and categories need not be unique.
 
-Reject empty or all-zero requirements; every activity needs at least one strictly positive consumable input. Apply exact decimal quantity validation and comparisons. Validate probabilities with `probability_epsilon = 1e-14` and require a valid final effective sampling interval as specified in Section 17. Require the explicit duration discriminator and every required numeric parameter from Section 15; do not insert hidden numeric defaults. User-entered duration parameters have exact decimal semantics. Beta-PERT requires finite user-supplied `min`, `mode`, `max`, and `lambda`, with `0 <= min <= mode <= max` and `lambda > 0`; incomplete or invalid parameters are validation errors, including in degenerate cases.
+Reject empty or all-zero requirements; every activity needs at least one strictly positive consumable input. Apply exact decimal quantity validation and comparisons. Validate probabilities with `probability_epsilon = 1e-14` and require a valid final effective sampling interval as specified in Section 17. Require the explicit duration discriminator and every required numeric parameter from Section 15; do not insert hidden numeric defaults. User-entered duration parameters have exact decimal semantics. Beta-PERT requires finite user-supplied `min`, `mode`, `max`, and `lambda`, with `0 <= min <= mode <= max` and `lambda > 0`; incomplete parameters block simulation, including in degenerate cases; invalid supplied parameters invalidate drafts too (Section 54).
 
 ## 46. Additional Validation Warnings
 
@@ -435,3 +435,59 @@ These tests must verify the approved specification, not freeze an arbitrary impl
 The normative rules above implement these decisions: D1 multiplicity (Sections 12, 13, 26, 27); D2 positive requirements (10, 45); D3 exact decimal quantities (8, 26, 45); D4 inclusive atomic safety limits (30); D5 probability validation and residual sampling (17, 18); D6 lifecycle counters (28, 38); D7 schema identity, explicit parameters, and settings placement (6, 15, 45, 47); and D8 independently keyed reproducibility (35). Section 52 provides acceptance requirements for these decisions.
 
 Architecture and public schemas must conform to these decisions without adding implicit allocation policies, numeric defaults, or other unapproved semantics.
+
+## 54. Documentation and incomplete drafts (2026-09-30)
+
+This requested extension distinguishes structurally valid drafts from simulation-ready
+models. Sections 14–18 and the complete-input requirements elsewhere describe
+simulation-ready inputs. All unrelated D1–D8 semantics remain unchanged.
+
+Nodes and outcomes may carry optional `documentation`; activities may carry optional
+`duration_documentation`. The latter belongs to the activity so it remains available
+when the duration distribution is unknown or changes. Each documentation object uses
+optional nullable text fields: `comments`, `assumptions`, `certainty`, `explanation`,
+`rationale`, and `references`. Node editors expose the first four; duration and outcome
+editors expose rationale, assumptions, references, and certainty. Absent documentation,
+`null`, and empty documentation all mean no supplied notes. Empty text is allowed.
+Certainty is a user description, with no inferred numeric interpretation. Documentation
+does not enter enablement, sampling, RNG keys, durations, quantities, or results.
+
+Drafts represent unknown required simulation inputs explicitly:
+
+- `duration: null`: no duration distribution selected.
+- A selected distribution retains its required field names, with any unknown numeric
+  values set to `null`, for example `{"type":"uniform","min":"0","max":null}`.
+- `probability: null`: an unknown outcome probability.
+
+Required fields may not be omitted. Empty numeric strings, booleans, nonfinite values,
+negative durations, out-of-range probabilities, malformed references, duplicate IDs,
+and other previously invalid supplied inputs remain invalid. Compare all supplied
+ordered duration bounds, even across unknown fields: min=3, mode=null, max=2 is invalid.
+Unknown is distinct from an explicit zero duration. No draft value is automatically
+estimated or replaced by a default.
+
+For a partially specified outcome set, validate supplied probabilities individually.
+Reject known totals already above `1 + 1e-14` and known probabilities before the
+canonical final outcome whose sum exceeds one, since neither can be completed under
+Section 17. Defer the full total and final-residual checks until all values are known.
+The inclusive tolerance, canonical ordering and final-interval rule for complete sets
+remain unchanged. Validation/import never normalize probabilities.
+
+`POST /api/models/validate` accepts drafts and returns `valid` and `draft_valid` for
+structural/supplied-value validity, plus `simulation_ready`. Explicit nulls produce
+`missing_input` informational diagnostics with activity IDs, scoped outcome IDs in
+messages, and exact field paths. They make `simulation_ready` false. Invalid supplied
+values produce errors and make draft validity false. Unknown graph branches are treated
+as possible only for conservative structural warnings; no execution is inferred.
+
+`POST /api/simulate` rejects missing inputs with HTTP 422 and error-severity
+`missing_input` diagnostics before generating a seed or launching realizations. Its
+report has `valid=false`, `simulation_ready=false`, and `draft_valid=true` if there are
+no other errors. Strict engine schemas remain complete-only. Library `validate_model`
+requires completeness by default; callers explicitly opt into draft validation with
+`require_complete=False`.
+
+The format remains `schema_version: "0.1"` as an additive reader extension: old complete
+networks retain their meaning without migration. Older application versions cannot
+read new documentation fields or null drafts. Decimal serialization stays lossless;
+documentation and explicit nulls survive export/import without changing object IDs.

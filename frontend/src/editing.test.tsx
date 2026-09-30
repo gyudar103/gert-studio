@@ -10,7 +10,7 @@ const outcomes=(values:string[])=>values.map((probability,i)=>({...blankOutcome(
 describe('probability editing',()=>{
   it.each(['0','1','0.6','0.123456789012345678901'])('closes the decimal total exactly for %s',value=>{
     const result=adjustProbability(outcomes(['0.5','0.3','0.2']),0,value);
-    expect(result.reduce((s,o)=>s.plus(o.probability),new BigNumber(0)).toFixed()).toBe('1');
+    expect(result.reduce((s,o)=>s.plus(o.probability!),new BigNumber(0)).toFixed()).toBe('1');
     expect(result[0].probability).toBe(value);
   });
   it('preserves proportions',()=>expect(adjustProbability(outcomes(['0.5','0.3','0.2']),0,'0.6').map(o=>o.probability)).toEqual(['0.6','0.24','0.16']));
@@ -20,11 +20,11 @@ describe('probability editing',()=>{
     const result=adjustProbability(original,index,'0.4000');
     expect(result[index].probability).toBe('0.4000');
     expect(original).toEqual(before);
-    expect(result.reduce((s,o)=>s.plus(o.probability),new BigNumber(0)).toFixed()).toBe('1');
+    expect(result.reduce((s,o)=>s.plus(o.probability!),new BigNumber(0)).toFixed()).toBe('1');
     const other=[0,1,2].filter(i=>i!==index);
     // Cross multiplication compares ratios without introducing division rounding.
-    const difference=new BigNumber(result[other[0]].probability).times(original[other[1]].probability)
-      .minus(new BigNumber(result[other[1]].probability).times(original[other[0]].probability));
+    const difference=new BigNumber(result[other[0]].probability!).times(original[other[1]].probability)
+      .minus(new BigNumber(result[other[1]].probability!).times(original[other[0]].probability));
     expect(difference.abs().lte('1e-39')).toBe(true);
   });
   it('handles both endpoints and preserves zero-weight siblings',()=>{
@@ -38,16 +38,16 @@ describe('probability editing',()=>{
   });
   it('keeps invalid siblings visible for correction rather than treating them as zero',()=>{
     expect(adjustProbability(outcomes(['0.5','','bad']),0,'0.6').map(o=>o.probability)).toEqual(['0.6','','bad']);
-    expect(adjustProbability(outcomes(['1']),0,'').map(o=>o.probability)).toEqual(['']);
+    expect(adjustProbability(outcomes(['1']),0,'').map(o=>o.probability)).toEqual([null]);
   });
   it('allocates zero siblings equally with exact residual closure',()=>{
     expect(adjustProbability(outcomes(['1','0','0']),0,'0.4').map(o=>o.probability)).toEqual(['0.4','0.3','0.3']);
     const thirds=adjustProbability(outcomes(['1','0','0','0']),0,'0');
-    expect(thirds.reduce((s,o)=>s.plus(o.probability),new BigNumber(0)).toFixed()).toBe('1');
+    expect(thirds.reduce((s,o)=>s.plus(o.probability!),new BigNumber(0)).toFixed()).toBe('1');
   });
   it('keeps a single valid outcome at one',()=>expect(adjustProbability(outcomes(['1']),0,'0')[0].probability).toBe('1'));
   it.each(['','-','abc','1e','-0.1','1.1','Infinity'])('preserves invalid drafts without rewriting siblings: %s',value=>{
-    expect(adjustProbability(outcomes(['0.5','0.5']),0,value).map(o=>o.probability)).toEqual([value,'0.5']);
+    expect(adjustProbability(outcomes(['0.5','0.5']),0,value).map(o=>o.probability)).toEqual([value===''?null:value,'0.5']);
   });
 });
 describe('result presentation',()=>{

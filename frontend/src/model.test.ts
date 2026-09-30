@@ -25,8 +25,8 @@ describe('canonical model and transport',()=>{
     expect(g.edges).toEqual(expect.arrayContaining([expect.objectContaining({source:'n:2',target:'a:3'}),expect.objectContaining({source:'a:3',target:'n:3'}),expect.objectContaining({source:'n:3',target:'a:4'}),expect.objectContaining({source:'a:4',target:'n:2'})]));
   });
   it('leaves all new numeric parameters blank, including lambda and probability',()=>{
-    expect(blankDuration('beta-PERT')).toEqual({type:'beta-PERT',min:'',mode:'',max:'',lambda:''});
-    expect(newActivity('a').outcomes[0].probability).toBe('');
+    expect(blankDuration('beta-PERT')).toEqual({type:'beta-PERT',min:null,mode:null,max:null,lambda:null});
+    expect(newActivity('a').outcomes[0].probability).toBeNull();
   });
   it('displays an exact sum without changing declared probabilities',()=>{
     const outcomes=demoWorkspace().model.activities[3].outcomes;

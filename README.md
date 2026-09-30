@@ -30,7 +30,10 @@ outcomes in Properties. **Fit View** brings the network into view as it grows.
 with the backend before replacing the current network. Decimal values retain their
 exact text. Layout is regenerated on import; simulation settings stay separate.
 Export before refreshing: there is no database or automatic browser persistence.
-Incomplete drafts can be exported but must pass validation before import.
+Structurally valid drafts can be exported and imported with explicit `null` duration
+distributions, parameters, and probabilities. Invalid supplied values still block
+import. Complete missing inputs before simulation. Node, duration, and outcome notes
+are edited in the properties panel and persist in JSON; certainty is descriptive only.
 
 ## Verify
 

@@ -22,12 +22,13 @@ connections and does not apply a DAG or cycle-prevention policy.
 
 ## Exact decimal handling
 
-Quantity, probability, duration, and simulation-time text inputs remain strings from
-editing through request construction. The UI displays a probability total with
+Supplied quantity, probability, duration, and simulation-time inputs remain strings
+from editing through request construction. Blank duration parameters and probabilities
+are explicit nulls; an unselected duration is null. The UI displays a probability total with
 `bignumber.js`. Manual probability edits use the explicitly requested sibling
 adjustment described below; displaying totals does not modify outcomes. The API adapter uses `json-bigint` with native `BigInt` so large
-integer seeds and limits are not coerced through JavaScript `Number`. Empty required
-numeric fields remain empty and are rejected by the backend; there are no frontend
+integer seeds and limits are not coerced through JavaScript `Number`. Other empty required
+numeric fields (quantities and settings) remain invalid; there are no frontend
 numeric defaults. `simulationBody` emits decimal strings and integer JSON tokens while
 omitting an optional seed when the user leaves it blank.
 
@@ -46,6 +47,14 @@ duration, requirement, outcome, and produced-item fields. It makes every selecte
 distribution's required fields visible; Beta-PERT always shows an empty required
 `lambda` field until the user supplies it.
 
+`DocumentationEditor` provides collapsible text metadata on nodes, activity durations,
+and outcomes. Notes flow through the normal model update callbacks and snapshot undo.
+Node properties link to associated activities and incoming outcomes. The canvas projects
+only concise labels, probabilities and an Incomplete activity badge, never full notes.
+`missingInputs` derives field-specific navigation diagnostics from explicit nulls and
+disables simulation until they are completed; it does not certify supplied values.
+Backend reports distinguish valid drafts from simulation-ready models.
+
 `api.ts` centralizes lossless requests to `POST /api/models/validate` and
 `POST /api/simulate`. It converts network failures, malformed responses, HTTP 422
 diagnostics, and successful JSON responses into UI state. Validation diagnostics are
@@ -57,8 +66,8 @@ duplicate requests while either operation is running.
 ## JSON files
 
 `files.ts` exports only the mathematical model, with decimal fields stored as
-strings. Export is also available for incomplete drafts; a draft must be corrected
-before it can pass import validation. A lexical pass quotes number tokens while
+strings, preserving documentation and explicit nulls. Structurally valid incomplete
+drafts pass import validation; invalid supplied values do not. A lexical pass quotes number tokens while
 leaving complete JSON string tokens untouched. The existing strict `json-bigint`
 parser therefore reads numeric lexemes as strings without a JavaScript Number
 conversion. The original, unmodified file is sent to backend validation, preserving
@@ -140,7 +149,10 @@ As explicitly requested for frontend editing, `adjustProbability` redistributes
 only sibling outcomes in the same activity when a probability is edited. It uses
 decimal arithmetic, proportional weights, equal allocation for all-zero siblings,
 and final residual closure so stored decimal strings total exactly one. A lone
-valid outcome becomes one. Invalid/incomplete edited or sibling values remain for
+valid outcome becomes one. If the pre-edit set contains any null probability, only
+the edited outcome changes, including when filling the last unknown. Clearing a value
+stores null. Proportional editing resumes on subsequent edits to complete sets.
+Invalid edited or sibling values remain for
 correction and backend validation. Import and validation never normalize values;
 backend sampling and probability semantics are unchanged. This editing convenience
 is disclosed next to the probability total.

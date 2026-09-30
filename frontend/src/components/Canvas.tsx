@@ -4,7 +4,7 @@ import type {Point,Selection,Workspace} from '../types';
 import {graphView,type CardData} from '../graph';
 function Card({data,selected}:NodeProps<Node<CardData>>) {
   return <div className={`graph-card ${data.kind} ${selected?'selected':''}`}>
-    <Handle type="target" position={Position.Left}/><div className="card-kind">{data.kind==='activity'?'Activity':data.kind}</div><strong>{data.title}</strong><small>{data.subtitle}</small><Handle type="source" position={Position.Right}/>
+    <Handle type="target" position={Position.Left}/><div className="card-kind">{data.kind==='activity'?'Activity':data.kind}{data.incomplete && <span className="incomplete-badge" title="Missing simulation inputs"> · Incomplete</span>}</div><strong>{data.title}</strong><small>{data.subtitle}</small><Handle type="source" position={Position.Right}/>
   </div>;
 }
 const nodeTypes={card:Card};

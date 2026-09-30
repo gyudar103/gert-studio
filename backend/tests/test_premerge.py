@@ -26,7 +26,7 @@ def test_aggregate_formatting_does_not_inherit_callers_decimal_context():
 
 def test_openapi_describes_decimal_request_contracts_and_errors():
     document = TestClient(app).get("/openapi.json").json()
-    for path, name in (("/api/models/validate", "Model"), ("/api/simulate", "SimulationRequest")):
+    for path, name in (("/api/models/validate", "DraftModel"), ("/api/simulate", "SimulationRequest")):
         operation = document["paths"][path]["post"]
         assert operation["requestBody"]["required"]
         assert operation["requestBody"]["content"]["application/json"]["schema"]["$ref"] == (
@@ -34,9 +34,9 @@ def test_openapi_describes_decimal_request_contracts_and_errors():
         assert operation["responses"]["422"]["content"]["application/json"]["schema"]["$ref"] == (
             "#/components/schemas/ValidationReport")
     schema = document["components"]["schemas"]
-    assert set(schema["BetaPERT"]["required"]) == {"type", "min", "mode", "max", "lambda"}
-    assert "default" not in schema["BetaPERT"]["properties"]["lambda"]
-    assert "settings" not in schema["Model"]["properties"]
+    assert set(schema["DraftBetaPERT"]["required"]) == {"type", "min", "mode", "max", "lambda"}
+    assert "default" not in schema["DraftBetaPERT"]["properties"]["lambda"]
+    assert "settings" not in schema["DraftModel"]["properties"]
 
 
 def test_beta_pert_requires_canonical_lambda_not_internal_shape_alias():

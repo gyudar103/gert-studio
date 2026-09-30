@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {Activity,Diagnostic,GertNode,Item,Model,Selection,SettingsForm,SimulationResult,ValidationReport} from './types';
-import {apiModel,diagnosticSelection,emptySettings,emptyWorkspace,freshId,newActivity,newNode} from './model';
+import {apiModel,diagnosticSelection,emptySettings,emptyWorkspace,freshId,newActivity,newNode,missingInputs} from './model';
 import {ApiError,runSimulation,validateModel} from './api';
 import {demoSettings,demoWorkspace} from './demo';
 import {downloadModel,importModel} from './files';
@@ -25,6 +25,7 @@ export default function App() {
   const [canvasVersion,setCanvasVersion]=useState(0);
   const [focus,setFocus]=useState(0);
   const model=workspace.model;
+  const missing=missingInputs(model);
   function undo() {
     if(lock.current || !restore()) return;
     setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);
@@ -78,7 +79,7 @@ export default function App() {
     reset(demo?demoWorkspace():emptyWorkspace());setSettings(demo?{...demoSettings}:emptySettings());setSelection(null);setReport(undefined);setResult(undefined);setError('');setImportDiagnostics(false);setCanvasVersion(v=>v+1);
   }
   async function submit(kind:'validate'|'simulate') {
-    if(lock.current) return;
+    if(lock.current || (kind==='simulate' && missing.length)) return;
     lock.current=true;setBusy(kind);setError('');setResult(undefined);setReport(undefined);setImportDiagnostics(false);
     try {
       if(kind==='validate') {setReport(await validateModel(apiModel(workspace)));setTab('validation');}
@@ -101,7 +102,7 @@ export default function App() {
   }
   function selectDiagnostic(d:Diagnostic) {const selected=diagnosticSelection(model,d.path,d.element_id);if(selected){setSelection(selected);setFocus(f=>f+1);}}
   return <div className="app">
-    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><button disabled={!!busy||!canUndo} onClick={undo} title="Undo (Ctrl+Z / Cmd+Z)">Undo</button><span className="version">v0.1 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><button disabled={!!busy||!canUndo} onClick={undo} title="Undo (Ctrl+Z / Cmd+Z)">Undo</button><span className="version">v0.1 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy||missing.length>0} title={missing.length?'Complete the missing inputs listed below before simulation':undefined} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
     {error && <div role="alert" className="error-banner">{error}<button aria-label="Dismiss message" onClick={()=>setError('')}>×</button></div>}
     <main className="workspace">
       <fieldset className="editor-shell" disabled={!!busy}><aside className="sidebar" aria-label="Model and items">
@@ -130,10 +131,10 @@ export default function App() {
           {busy && <div className="busy-overlay" role="status">{busy==='simulate'?'Simulating… results will appear when all realizations finish.':'Validating with the backend…'}</div>}
         </div><div className="canvas-legend"><span>● Start</span><span>■ State</span><span>◎ Terminal</span><span>▰ Activity → outcome branches</span><span>Drag to arrange · Scroll to zoom</span></div>
       </section>
-      <fieldset className="editor-shell" disabled={!!busy}><Properties model={model} selection={selection} updateNode={updateNode} updateActivity={updateActivity} updateItem={updateItem} remove={remove}/></fieldset>
+      <fieldset className="editor-shell" disabled={!!busy}><Properties model={model} selection={selection} select={setSelection} updateNode={updateNode} updateActivity={updateActivity} updateItem={updateItem} remove={remove}/></fieldset>
     </main>
     <section className="analysis-panel" aria-label="Analysis"><div className="analysis-heading"><div role="tablist" aria-label="Analysis views"><button role="tab" aria-selected={tab==='validation'} onClick={()=>setTab('validation')}>Validation {report?`· ${report.diagnostics.length}`:''}</button><button role="tab" aria-selected={tab==='results'} onClick={()=>setTab('results')}>Simulation results</button></div><small>Backend semantics · Exact decimal inputs</small></div>
-      <div className="analysis-content">{tab==='validation'?(report?<>{importDiagnostics && <p className="analysis-empty">These diagnostics refer to the rejected import file. Your current network is unchanged.</p>}<Diagnostics report={report} onSelect={importDiagnostics?()=>{}:selectDiagnostic}/></>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
+      <div className="analysis-content">{missing.length>0 && <div className="missing-inputs"><strong>Simulation unavailable: {missing.length} missing input{missing.length===1?'':'s'}. Drafts can be exported and imported.</strong>{missing.map((d,i)=><button key={i} className="diagnostic info" onClick={()=>selectDiagnostic(d)}>{d.message}</button>)}</div>}{tab==='validation'?(report?<>{importDiagnostics && <p className="analysis-empty">These diagnostics refer to the rejected import file. Your current network is unchanged.</p>}<Diagnostics report={report} onSelect={importDiagnostics?()=>{}:selectDiagnostic}/></>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
     </section><footer>GERT Studio <span>Local workspace · Export JSON to keep your model before refreshing</span></footer>
   </div>;
 }

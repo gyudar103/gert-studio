@@ -27,6 +27,16 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", serialize_by_alias=True)
 
 
+class Documentation(Contract):
+    """Descriptive, user-entered metadata; never an input to sampling."""
+    comments: str | None = None
+    assumptions: str | None = None
+    certainty: str | None = None
+    explanation: str | None = None
+    rationale: str | None = None
+    references: str | None = None
+
+
 class Fixed(Contract):
     type: Literal["fixed"]
     value: Quantity
@@ -39,7 +49,7 @@ class Uniform(Contract):
 
     @model_validator(mode="after")
     def ordered(self):
-        if self.min > self.max:
+        if self.min is not None and self.max is not None and self.min > self.max:
             raise ValueError("Require min <= max")
         return self
 
@@ -52,7 +62,8 @@ class Triangular(Contract):
 
     @model_validator(mode="after")
     def ordered(self):
-        if not self.min <= self.mode <= self.max:
+        supplied = [v for v in (self.min, self.mode, self.max) if v is not None]
+        if supplied != sorted(supplied):
             raise ValueError("Require min <= mode <= max")
         return self
 
@@ -78,6 +89,7 @@ class ItemType(Contract):
 class NodeBase(Contract):
     id: Identifier
     label: str
+    documentation: Documentation | None = None
 
 
 class Start(NodeBase):
@@ -105,6 +117,7 @@ class Outcome(Contract):
     probability: Annotated[Number, Field(ge=0, le=1)]
     target_node: Identifier
     produced_items: dict[Identifier, Quantity]
+    documentation: Documentation | None = None
 
 
 class Activity(Contract):
@@ -114,6 +127,7 @@ class Activity(Contract):
     requirements: dict[Identifier, Quantity]
     duration: Duration
     outcomes: list[Outcome] = Field(min_length=1)
+    duration_documentation: Documentation | None = None
 
 
 class Model(Contract):
@@ -133,6 +147,43 @@ class Settings(Contract):
     seed: Annotated[int, Field(strict=True)] | None = None
 
 
+class DraftFixed(Fixed):
+    value: Quantity | None
+
+
+class DraftUniform(Uniform):
+    min: Quantity | None
+    max: Quantity | None
+
+
+class DraftTriangular(Triangular):
+    min: Quantity | None
+    mode: Quantity | None
+    max: Quantity | None
+
+
+class DraftBetaPERT(DraftTriangular):
+    type: Literal["beta-PERT"]
+    shape: Annotated[Number, Field(gt=0)] | None = Field(alias="lambda")
+
+
+DraftDuration = Annotated[DraftFixed | DraftUniform | DraftTriangular | DraftBetaPERT,
+                          Field(discriminator="type")]
+
+
+class DraftOutcome(Outcome):
+    probability: Annotated[Number, Field(ge=0, le=1)] | None
+
+
+class DraftActivity(Activity):
+    duration: DraftDuration | None
+    outcomes: list[DraftOutcome] = Field(min_length=1)
+
+
+class DraftModel(Model):
+    activities: list[DraftActivity]
+
+
 class SimulationRequest(Contract):
-    model: Model
+    model: DraftModel
     settings: Settings

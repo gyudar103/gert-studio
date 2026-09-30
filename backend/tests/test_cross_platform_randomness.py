@@ -143,7 +143,14 @@ def test_complete_demo_reference_and_invariance():
     request = SimulationRequest.model_validate_json(
         (FIXTURES / "reproducibility-demo.json").read_text(encoding="utf-8-sig"))
     result = simulate(request.model, request.settings)
-    canonical_json = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
+    assert result["validation"]["draft_valid"] is True
+    assert result["validation"]["simulation_ready"] is True
+    legacy_result = deepcopy(result)
+    # The additive readiness flags are transport metadata. Preserve the original
+    # reference hash for every existing field rather than repinning engine output.
+    del legacy_result["validation"]["draft_valid"]
+    del legacy_result["validation"]["simulation_ready"]
+    canonical_json = json.dumps(legacy_result, sort_keys=True, separators=(",", ":")).encode()
     # Pins every duration, instance, timestamp, outcome, inventory and aggregate.
     assert hashlib.sha256(canonical_json).hexdigest() == "0990d8f3a875d902e3b7bcd96a2d5789d890f95bac4606f1cb35ac0802edae5e"
     assert result == simulate(request.model, request.settings, workers=4)

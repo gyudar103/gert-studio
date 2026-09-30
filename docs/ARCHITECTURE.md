@@ -1,7 +1,7 @@
 # GERT Studio backend architecture
 
-This implementation conforms to the approved PRODUCT.md and MODEL.md checkpoint a4d0d85.
-Those specifications remain unchanged. The engine has no FastAPI dependency.
+This implementation conforms to PRODUCT.md and MODEL.md, including the requested
+documentation/draft extension in MODEL.md Section 54. The engine has no FastAPI dependency.
 
 ## Components
 
@@ -129,6 +129,19 @@ Increasing N preserves the earlier realization prefix. Threads establish the
 correctness contract; CPU speedup is not promised.
 
 ## Validation
+
+`Model` and its duration/outcome contracts remain complete-only. `DraftModel` overrides
+only activity duration/parameters and outcome probability to allow explicit nulls.
+Both contracts share documentation fields and supplied-value constraints. Alias metadata
+for draft beta-PERT `lambda` belongs to the full nullable field, not one union member.
+All required parameter names remain mandatory, even when their values are unknown.
+Both HTTP routes parse `DraftModel`; validation uses `require_complete=False`, while
+simulation uses completeness validation and reconstructs a strict `Model` before the
+engine executes. `ValidationReport` adds `draft_valid` and `simulation_ready`; `valid`
+describes acceptance for the current operation. Missing-input diagnostics differ from
+schema/semantic errors and identify object paths. Unknown branches are conservatively
+considered possible for static warnings only. See MODEL.md Section 54 for partial-sum
+validation and exact API behavior. No engine/RNG version change is needed.
 
 Errors identify a field path and, for semantic checks, an element ID. Invalid schema
 diagnostics retain Pydantic locations and omit potentially nonserializable error context.

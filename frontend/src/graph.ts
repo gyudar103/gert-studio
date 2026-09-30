@@ -1,11 +1,11 @@
 import {MarkerType,type Edge,type Node} from '@xyflow/react';
 import type {Selection,Workspace} from './types';
-export type CardData={title:string; subtitle:string; kind:string; index:number; selectionKind:'node'|'activity'};
+export type CardData={title:string; subtitle:string; kind:string; index:number; selectionKind:'node'|'activity'; incomplete?:boolean};
 export function graphView(workspace:Workspace,selection:Selection):{nodes:Node<CardData>[];edges:Edge[]} {
   const {model,layout}=workspace;
   const nodes:Node<CardData>[]=[
     ...model.nodes.map((n,i)=>({id:`n:${i}`,type:'card',position:layout.nodes[i]||{x:0,y:i*150},selected:selection?.kind==='node'&&selection.index===i,data:{title:n.label||n.id,subtitle:n.id,kind:n.type,index:i,selectionKind:'node' as const}})),
-    ...model.activities.map((a,i)=>({id:`a:${i}`,type:'card',position:layout.activities[i]||{x:250,y:i*150},selected:selection?.kind==='activity'&&selection.index===i,data:{title:a.label||a.id,subtitle:`${a.duration.type} · ${a.outcomes.length} outcome${a.outcomes.length===1?'':'s'}`,kind:'activity',index:i,selectionKind:'activity' as const}})),
+    ...model.activities.map((a,i)=>({id:`a:${i}`,type:'card',position:layout.activities[i]||{x:250,y:i*150},selected:selection?.kind==='activity'&&selection.index===i,data:{title:a.label||a.id,subtitle:`${a.duration?.type??'Unknown duration'} · ${a.outcomes.length} outcome${a.outcomes.length===1?'':'s'}`,kind:'activity',index:i,selectionKind:'activity' as const,incomplete:a.duration===null || Object.values(a.duration).some(v=>v===null) || a.outcomes.some(o=>o.probability===null)}})),
   ];
   const edges:Edge[]=[];
   model.activities.forEach((a,ai)=>{

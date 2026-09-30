@@ -5,6 +5,7 @@ from app.engine.randomness import ENGINE_VERSION, REPRODUCIBILITY_VERSION
 from app.engine.simulation import run_realization
 from app.reporting import run_payload, summarize
 from app.validation import validate_model
+from app.schemas.model import Model
 
 
 class InvalidModel(ValueError):
@@ -19,6 +20,8 @@ def simulate(model, settings, *, workers=1):
     report = validate_model(model)
     if not report.valid:
         raise InvalidModel(report)
+    # Drafts never reach the engine. Metadata is retained but not read by it.
+    model = Model.model_validate(model.model_dump(by_alias=True))
     seed = settings.seed if settings.seed is not None else secrets.randbits(128)
 
     def run(index):

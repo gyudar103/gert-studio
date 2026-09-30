@@ -1,6 +1,6 @@
 """Expose the same Pydantic contracts used by the lossless JSON adapters."""
 from fastapi.openapi.utils import get_openapi
-from app.schemas.model import Model, SimulationRequest
+from app.schemas.model import DraftModel, SimulationRequest
 from app.validation import ValidationReport
 
 
@@ -10,11 +10,11 @@ def install_openapi(app):
             return app.openapi_schema
         document = get_openapi(title=app.title, version=app.version, routes=app.routes)
         components = document.setdefault("components", {}).setdefault("schemas", {})
-        for contract in (Model, SimulationRequest, ValidationReport):
+        for contract in (DraftModel, SimulationRequest, ValidationReport):
             schema = contract.model_json_schema(ref_template="#/components/schemas/{model}")
             components.update(schema.pop("$defs", {}))
             components[contract.__name__] = schema
-        for path, name in (("/api/models/validate", "Model"), ("/api/simulate", "SimulationRequest")):
+        for path, name in (("/api/models/validate", "DraftModel"), ("/api/simulate", "SimulationRequest")):
             operation = document["paths"][path]["post"]
             operation["requestBody"] = {
                 "required": True,
@@ -25,7 +25,7 @@ def install_openapi(app):
                 "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationReport"}}},
             }
         document["paths"]["/api/models/validate"]["post"]["responses"]["200"] = {
-            "description": "Validation diagnostics; valid is false for semantic model errors",
+            "description": "Draft validation: valid/draft_valid accept structurally valid drafts; simulation_ready requires complete inputs. Missing inputs have informational diagnostics.",
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationReport"}}},
         }
         app.openapi_schema = document

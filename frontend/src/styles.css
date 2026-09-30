@@ -2,3 +2,8 @@
 
 .result-number { font: inherit; color: inherit; background: transparent; border: 0; padding: 0 2px; cursor: pointer; border-bottom: 1px dotted currentColor; border-radius: 2px; }
 .result-number:hover, .result-number:focus-visible { background: #e2eee8; }
+
+.documentation { margin: 12px 0; }
+.field textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px; border: 1px solid #c5d3cd; border-radius: 5px; background: #fff; color: #183d34; }
+.incomplete-badge { color: #925818; }
+.missing-inputs { padding: 12px; background: #fff7e9; border-radius: 8px; margin-bottom: 12px; }

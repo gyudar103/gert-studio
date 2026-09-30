@@ -19,6 +19,8 @@ class Diagnostic(BaseModel):
 
 class ValidationReport(BaseModel):
     valid: bool
+    draft_valid: bool = False
+    simulation_ready: bool = False
     diagnostics: list[Diagnostic]
 
 
@@ -27,12 +29,22 @@ def schema_diagnostics(exc: ValidationError) -> list[Diagnostic]:
                        path=list(e["loc"])) for e in exc.errors(include_url=False)]
 
 
-def validate_model(model: Model) -> ValidationReport:
+def validate_model(model: Model, *, require_complete=True) -> ValidationReport:
     diagnostics = []
 
     def emit(code, message, path, element=None, severity="error"):
         diagnostics.append(Diagnostic(severity=severity, code=code, message=message,
                                       path=path, element_id=element))
+
+    def missing(message, path, element):
+        emit("missing_input", message, path, element, "error" if require_complete else "info")
+
+    def report():
+        invalid = any(d.severity == "error" and d.code != "missing_input" for d in diagnostics)
+        incomplete = any(d.code == "missing_input" for d in diagnostics)
+        return ValidationReport(valid=not invalid and not (require_complete and incomplete),
+                                draft_valid=not invalid, simulation_ready=not invalid and not incomplete,
+                                diagnostics=diagnostics)
 
     for field in ("nodes", "activities", "item_types"):
         seen = set()
@@ -64,6 +76,12 @@ def validate_model(model: Model) -> ValidationReport:
 
     for i, a in enumerate(model.activities):
         path = ["activities", i]
+        if a.duration is None:
+            missing(f"Activity {a.id}: choose a duration distribution", path + ["duration"], a.id)
+        else:
+            for field, value in a.duration.model_dump(by_alias=True).items():
+                if value is None:
+                    missing(f"Activity {a.id}: enter duration {field}", path + ["duration", field], a.id)
         source = nodes.get(a.source_node)
         if source is None:
             emit("source_reference", "Source node does not exist", path + ["source_node"], a.id)
@@ -77,10 +95,13 @@ def validate_model(model: Model) -> ValidationReport:
             if q > 0:
                 consumers[a.source_node, r].add(a.id)
         ordered = sorted(a.outcomes, key=lambda o: o.id)
-        final = 1 - sum((Fraction(o.probability) for o in ordered[:-1]), Fraction())
+        complete = all(o.probability is not None for o in ordered)
+        final = 1 - sum((Fraction(o.probability) for o in ordered[:-1]), Fraction()) if complete else None
         outcome_ids = set()
         for j, o in enumerate(a.outcomes):
             op = path + ["outcomes", j]
+            if o.probability is None:
+                missing(f"Activity {a.id}, outcome {o.id}: enter probability", op + ["probability"], a.id)
             if o.id in outcome_ids:
                 emit("outcome_id", "Outcome ID must be unique within its activity", op + ["id"], a.id)
             outcome_ids.add(o.id)
@@ -89,22 +110,34 @@ def validate_model(model: Model) -> ValidationReport:
                 emit("target_reference", "Target node does not exist", op + ["target_node"], a.id)
             elif target.type == "start":
                 emit("start_target", "Outcomes cannot target Start", op + ["target_node"], a.id)
-            effective = final if o is ordered[-1] else Fraction(o.probability)
-            if source is not None and target is not None and effective > 0:
+            if complete:
+                effective = final if o is ordered[-1] else Fraction(o.probability)
+                possible = effective > 0
+            else:
+                # A partial set has no effective sampling intervals yet. The
+                # final branch may absorb a residual even when declared zero.
+                possible = o.probability is None or o is ordered[-1] or o.probability > 0
+            if source is not None and target is not None and possible:
                 graph.add_edge(source.id, target.id)
             for r, q in o.produced_items.items():
                 if r not in items:
                     emit("item_reference", "Produced item is not declared", op + ["produced_items", r], a.id)
-                if q > 0 and effective > 0:
+                if q > 0 and possible:
                     producers[o.target_node, r].add(a.id)
-        total = sum((Fraction(o.probability) for o in ordered), Fraction())
-        if abs(total - 1) > PROBABILITY_EPSILON:
+        total = sum((Fraction(o.probability) for o in ordered if o.probability is not None), Fraction())
+        if complete and abs(total - 1) > PROBABILITY_EPSILON:
             emit("probability_sum", "Outcome total must be within 1e-14 of one; values are not normalized", path + ["outcomes"], a.id)
-        if not 0 <= final <= 1:
+        if complete and not 0 <= final <= 1:
             emit("probability_interval", "Final effective sampling interval must lie in [0,1]", path + ["outcomes"], a.id)
+        if not complete:
+            if total > 1 + PROBABILITY_EPSILON:
+                emit("probability_sum", "Known probabilities already exceed one plus 1e-14; correct supplied values", path + ["outcomes"], a.id)
+            preceding = sum((Fraction(o.probability) for o in ordered[:-1] if o.probability is not None), Fraction())
+            if preceding > 1:
+                emit("probability_interval", "Known preceding probabilities already exceed one; no valid final sampling interval", path + ["outcomes"], a.id)
 
     if any(d.severity == "error" for d in diagnostics):
-        return ValidationReport(valid=False, diagnostics=diagnostics)
+        return report()
 
     for i, a in enumerate(model.activities):
         source = nodes[a.source_node]
@@ -139,4 +172,4 @@ def validate_model(model: Model) -> ValidationReport:
              ["nodes"], severity="warning")
     if not set(terminals) & reachable:
         emit("possible_deadlock", "No terminal has an apparent path from Start", ["nodes"], severity="warning")
-    return ValidationReport(valid=True, diagnostics=diagnostics)
+    return report()

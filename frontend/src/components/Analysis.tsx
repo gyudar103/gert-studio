@@ -1,7 +1,7 @@
 import ResultNumber from './ResultNumber';
 import type {Diagnostic,Model,SimulationResult,ValidationReport} from '../types';
 export function Diagnostics({report,onSelect}:{report:ValidationReport;onSelect:(d:Diagnostic)=>void}) {
-  return <div className="diagnostics"><p className={report.valid?'valid':'invalid'} role="status">{report.valid?'Model valid':'Model needs attention'}</p>
+  return <div className="diagnostics"><p className={report.valid?'valid':'invalid'} role="status">{report.valid?(report.simulation_ready===false?'Draft valid · Complete missing inputs before simulation':'Model valid'):'Model needs attention'}</p>
     {(['error','warning','info'] as const).map(severity=>{
       const entries=report.diagnostics.filter(d=>d.severity===severity);
       return <section key={severity}><h3>{severity==='info'?'Information':`${severity[0].toUpperCase()}${severity.slice(1)}s`} <span className="count">{entries.length}</span></h3>

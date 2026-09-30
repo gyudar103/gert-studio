@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
-from app.schemas.model import Model, SimulationRequest
+from app.schemas.model import DraftModel, SimulationRequest
 from app.validation import Diagnostic, ValidationReport, schema_diagnostics, validate_model
 from app.engine.service import InvalidModel, simulate
 
@@ -41,10 +41,10 @@ def bad_input(exc):
 @router.post("/api/models/validate")
 async def validate(request: Request):
     try:
-        model = await parse(request, Model)
+        model = await parse(request, DraftModel)
     except (ValueError, UnicodeError) as exc:
         return bad_input(exc)
-    return validate_model(model)
+    return validate_model(model, require_complete=False)
 
 
 @router.post("/api/simulate")

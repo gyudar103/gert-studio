@@ -27,7 +27,7 @@ Users should be able to:
 7. Validate models and run reproducible Monte Carlo simulations.
 8. Estimate terminal probabilities, completion-time distributions, and activity execution counts.
 9. Inspect modeled outcomes separately from deadlocks, ambiguities, and cutoffs.
-10. Save, load, export, and reuse complete models.
+10. Save, load, export, and reuse complete models and structurally valid incomplete drafts.
 11. Eventually compare scenarios, identify sensitivities, and analyze costs.
 
 ## 4. Non-Goals for Initial Versions
@@ -54,6 +54,33 @@ Nodes hold items. Activities consume requirements at a source node and produce i
 - Item type: ID and readable name.
 - Activity: ID, label, source, named input quantities, duration distribution and parameters.
 - Outcome: ID, label, probability, target, produced item quantities.
+
+Selecting a node exposes its data and collapsible documentation (comments, assumptions,
+user-entered certainty, and explanation). It also lists associated outgoing activities
+and incoming outcomes with links to their details. Selecting an activity card or an
+outcome connection opens the activity panel and focuses the relevant outcome where
+applicable. Duration and outcome sections have collapsible rationale, assumptions,
+sources/references, and certainty fields. Full notes and parameter forms stay off the
+canvas. Certainty is descriptive and never affects simulation.
+
+New activities start with no selected duration distribution and unknown probabilities.
+The duration selector includes “Unknown — choose later”; blank duration parameters and
+probabilities are stored as explicit JSON nulls. Entering zero is distinct from leaving
+an input unknown. Changing distributions clears parameters to null and preserves notes.
+The canvas uses a compact Incomplete indicator on activities and `p=?` on unknown
+outcome connections. The analysis panel lists clickable missing-field explanations,
+and Run Simulation is unavailable until those fields are supplied. Backend validation
+remains authoritative for supplied values, references, totals, and simulation settings.
+
+While any outcome probability is unknown, an edit changes only that outcome, including
+the edit that fills the last unknown. Known siblings and unknowns are never filled or
+normalized implicitly. Once the set is complete, subsequent valid probability edits
+use the established proportional adjustment of valid siblings (or equal allocation
+when all sibling weights are zero); a single known outcome stays at one. Clearing a
+probability makes it unknown. Invalid text remains visible for correction. The panel
+explains this rule and displays the total; validation never performs this adjustment.
+Documentation and placeholder edits use the existing undo history, including atomic
+undo of probability adjustments. Import/model replacement still resets history.
 
 Probabilities belong to outcomes within an activity, not to the set of activities leaving a node. Cost, capacity-resource, conditional, and correlation controls are future features.
 
@@ -107,6 +134,13 @@ Per-terminal conditional duration statistics are an important extension, followe
 Messages have error, warning, or informational severity and explain the problem in ordinary language, identifying affected elements.
 
 Errors include duplicate IDs, invalid references, missing/multiple Start nodes, invalid distributions or quantities, prohibited Start/Terminal connections, missing activity outcomes, and invalid probabilities or sums. Probabilities are never silently normalized.
+
+Explicitly unknown duration distributions, required duration parameters, and outcome
+probabilities are incomplete information, not invalid supplied values. Structurally
+valid drafts can be imported and exported. Validation identifies missing fields and
+distinguishes “Draft valid” from simulation-ready models. Invalid supplied numbers or
+malformed structure still block import. Simulation rejects incomplete models before
+execution with object-specific explanations.
 
 Warnings include apparently unreachable elements, possible deadlocks, possible nonterminating cycles, unused or unavailable items, competing consumption, and possible simultaneous terminal outcomes. Conservative structural warnings must not be treated as proof of an actual runtime conflict.
 
