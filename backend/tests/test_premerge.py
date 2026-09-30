@@ -57,10 +57,9 @@ def test_beta_pert_default_serialization_round_trips_canonical_lambda():
 
 @pytest.mark.parametrize("mode,shape", [("1", "3e308"), ("2", "1e308")])
 def test_beta_pert_rejects_gamma_intermediate_overflow_before_sampling(mode, shape, monkeypatch):
-    import random
     def must_not_sample(*args):
         pytest.fail("Overflowing gamma intermediates must be caught before entering the rejection loop")
-    monkeypatch.setattr(random.Random, "betavariate", must_not_sample)
+    monkeypatch.setattr("app.engine.randomness.beta_variate", must_not_sample)
     m = model(activities=[activity(duration={
         "type": "beta-PERT", "min": "0", "mode": mode, "max": "2", "lambda": shape})])
     assert validate_model(m).valid  # Mathematically valid; numerical runtime failure only.

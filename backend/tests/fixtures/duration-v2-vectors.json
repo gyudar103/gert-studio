@@ -1,0 +1,281 @@
+{
+  "version": "gert-v2-py312-sha256-mt19937-crmath1",
+  "seed": 20260914,
+  "activity_id": "probe",
+  "purpose": "duration",
+  "vectors": [
+    {
+      "parameters": {
+        "type": "fixed",
+        "value": "0.100000000000000000001"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "0.100000000000000000001"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "0.100000000000000000001"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "0.100000000000000000001"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "0.100000000000000000001"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "max": "3.7",
+        "min": "0.1",
+        "type": "uniform"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "3.546913559806741655933137735701166093349456787109375"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "2.79413935382649327721082954667508602142333984375"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "3.1367162435962991917648423623177222907543182373046875"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "2.315995423864780722311706995242275297641754150390625"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "1.2",
+        "type": "triangular"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "3.08135947394052352"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "2.1951240531413338"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "2.51332001322628996"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "1.83988940104679572"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "4",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "1.2",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "2.45596006582603588"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "2.59225016846988736"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "2.9047445789583304"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "1.809155179417772224"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "4",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "0.1",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "2.03449467041387056"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "0.9670569292125334"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "0.64001392988112838"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "0.57676850000506072"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "4",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "3.7",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "3.47266991119373812"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "3.63346221168278596"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "2.92219218597557044"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "3.42015338228990176"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "0.125",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "1.9",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "2.35041230137318588"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "3.50281571741370388"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "3.6148677125467528"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "2.63602607824385128"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "20",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "1.9",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "2.31814796194505548"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "2.47271849814458512"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "2.63043573447991348"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "2.08032808852420912"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "lambda": "1e-30",
+        "max": "3.7",
+        "min": "0.1",
+        "mode": "1.2",
+        "type": "beta-PERT"
+      },
+      "samples": [
+        {
+          "realization": 0,
+          "ordinal": 0,
+          "duration": "3.53772039482526916"
+        },
+        {
+          "realization": 30,
+          "ordinal": 0,
+          "duration": "1.122919495913500984"
+        },
+        {
+          "realization": 44,
+          "ordinal": 2,
+          "duration": "1.69522009060493656"
+        },
+        {
+          "realization": 48,
+          "ordinal": 0,
+          "duration": "1.784731047320696824"
+        }
+      ]
+    }
+  ]
+}

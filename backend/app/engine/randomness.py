@@ -5,9 +5,11 @@ import math
 import random
 from decimal import Decimal
 from fractions import Fraction
+from app.engine.beta import beta_variate
+from app.engine.binary64 import sqrt
 
-ENGINE_VERSION = "0.1.0"
-REPRODUCIBILITY_VERSION = "gert-v1-py312-sha256-mt19937"
+ENGINE_VERSION = "0.1.1"
+REPRODUCIBILITY_VERSION = "gert-v2-py312-sha256-mt19937-crmath1"
 
 
 class SamplingError(ArithmeticError):
@@ -34,9 +36,9 @@ def sample_duration(distribution, rng) -> Fraction:
     if distribution.type == "triangular":
         u = Fraction(rng.random())
         if u <= mode:
-            normalized = math.sqrt(float(u * mode))
+            normalized = sqrt(float(u * mode))
         else:
-            normalized = 1 - math.sqrt(float((1 - u) * (1 - mode)))
+            normalized = 1 - sqrt(float((1 - u) * (1 - mode)))
     else:
         shape = Fraction(distribution.shape)
         try:
@@ -46,11 +48,11 @@ def sample_duration(distribution, rng) -> Fraction:
             raise SamplingError("Beta-PERT shape exceeds sampler numerical range") from exc
         if not all(math.isfinite(x) and x > 0 for x in (alpha, beta)):
             raise SamplingError("Invalid numerical beta shape")
-        # Python 3.12's gamma rejection sampler computes sqrt(2 * shape - 1).
+        # The gamma rejection sampler computes sqrt(2 * shape - 1).
         # Overflow makes its acceptance expression NaN and the loop never exits.
         if not all(math.isfinite(2 * x) for x in (alpha, beta)):
             raise SamplingError("Beta-PERT shape exceeds gamma sampler numerical range")
-        normalized = rng.betavariate(alpha, beta)
+        normalized = beta_variate(alpha, beta, rng)
     if not math.isfinite(normalized) or not 0 <= normalized <= 1:
         raise SamplingError("Sampler produced an invalid duration fraction")
     return low + width * Fraction(Decimal(repr(normalized)))

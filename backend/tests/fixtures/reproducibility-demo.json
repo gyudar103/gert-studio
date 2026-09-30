@@ -1,0 +1,30 @@
+{
+  "model": {
+    "schema_version": "0.1",
+    "project": {"id": "distribution-check", "name": "Parallel build, integration, test and rework"},
+    "item_types": [
+      {"id": "mechanical_request", "label": "Mechanical request"},
+      {"id": "software_request", "label": "Software request"},
+      {"id": "mechanical_module", "label": "Mechanical module"},
+      {"id": "software_build", "label": "Software build"},
+      {"id": "prototype", "label": "Prototype"},
+      {"id": "repair_request", "label": "Repair request"}
+    ],
+    "nodes": [
+      {"id": "start", "label": "Start", "type": "start", "initial_inventory": {"mechanical_request": "1", "software_request": "1"}},
+      {"id": "integration", "label": "Integration", "type": "state"},
+      {"id": "test", "label": "Test", "type": "state"},
+      {"id": "rework", "label": "Rework", "type": "state"},
+      {"id": "success", "label": "Success", "type": "terminal", "outcome_code": "success", "outcome_label": "Success", "outcome_category": "success"},
+      {"id": "failure", "label": "Failure", "type": "terminal", "outcome_code": "failure", "outcome_label": "Failure", "outcome_category": "failure"}
+    ],
+    "activities": [
+      {"id": "mechanical", "label": "Mechanical", "source_node": "start", "requirements": {"mechanical_request": "1"}, "duration": {"type": "triangular", "min": "2", "mode": "3", "max": "5"}, "outcomes": [{"id": "complete", "label": "Complete", "probability": "1", "target_node": "integration", "produced_items": {"mechanical_module": "1"}}]},
+      {"id": "software", "label": "Software", "source_node": "start", "requirements": {"software_request": "1"}, "duration": {"type": "uniform", "min": "3", "max": "6"}, "outcomes": [{"id": "complete", "label": "Complete", "probability": "1", "target_node": "integration", "produced_items": {"software_build": "1"}}]},
+      {"id": "integrate", "label": "Integrate", "source_node": "integration", "requirements": {"mechanical_module": "1", "software_build": "1"}, "duration": {"type": "fixed", "value": "1"}, "outcomes": [{"id": "complete", "label": "Complete", "probability": "1", "target_node": "test", "produced_items": {"prototype": "1"}}]},
+      {"id": "test", "label": "Test", "source_node": "test", "requirements": {"prototype": "1"}, "duration": {"type": "beta-PERT", "min": "1", "mode": "2", "max": "4", "lambda": "4"}, "outcomes": [{"id": "pass", "label": "Pass", "probability": "0.8", "target_node": "success", "produced_items": {}}, {"id": "retry", "label": "Retry", "probability": "0.15", "target_node": "rework", "produced_items": {"repair_request": "1"}}, {"id": "reject", "label": "Reject", "probability": "0.05", "target_node": "failure", "produced_items": {}}]},
+      {"id": "repair", "label": "Repair", "source_node": "rework", "requirements": {"repair_request": "1"}, "duration": {"type": "fixed", "value": "2"}, "outcomes": [{"id": "repaired", "label": "Repaired", "probability": "1", "target_node": "test", "produced_items": {"prototype": "1"}}]}
+    ]
+  },
+  "settings": {"realizations": 100, "seed": 20260914, "max_simulation_time": "100", "max_activity_instances": 1000, "max_activity_completions": 1000}
+}
