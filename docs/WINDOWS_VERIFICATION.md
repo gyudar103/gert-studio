@@ -196,20 +196,67 @@ and `admin-launcher.log` preserve the elevated run; `initial-guest-result.json` 
 `initial-launcher.log` preserve the harness timing failure. These are generated,
 ignored files, not source-controlled release artifacts.
 
-## Not yet verified / remaining release gates
+### Manual clean-Sandbox interactive acceptance
 
-Interactive acceptance inside the clean guest remains pending: double-click launch,
-automatic default-browser handoff, complete browser rendering, UI model creation or
-import, current editing features, result presentation/export, and the Exit confirmation.
-The equivalent developer-host browser suite passed, but that does not replace these
-guest observations. Desktop automation currently reports `failed to activate captured
-window` after refreshing and retrying the Sandbox window; the guest remains running.
+On 2026-10-01 the user completed the manual acceptance procedure in the clean
+Sandbox and reported the following results. These are user-observed results,
+distinct from the automated API and lifecycle evidence above. They complete the
+interactive application checks previously blocked by desktop automation's
+`failed to activate captured window` error.
 
-Other Windows versions, read-only extraction folders and clean-machine security
-software/signing behavior are not yet verified. No application change has been made
-during this Sandbox validation. The ZIP remains byte-identical to the tested release.
+| Manual check | Result |
+| --- | --- |
+| Double-click `GERT Studio.exe` | PASS |
+| Launcher/control window appears | PASS |
+| Normal launch requires no UAC/admin prompt | PASS |
+| Local backend starts | PASS |
+| Enter the displayed `127.0.0.1` URL manually in Edge | PASS; UI loads |
+| Full workspace renders normally | PASS |
+| Create/load/import a model | PASS |
+| Edit node/activity fields, including comments, notes and placeholders | PASS |
+| Undo / Ctrl+Z | PASS |
+| Probability sibling adjustment | PASS |
+| Export/import | PASS |
+| Simulation execution | PASS |
+| Three-significant-digit results and full-precision toggle | PASS |
+| `Exit GERT Studio` | PASS |
+| Backend shutdown after Exit | PASS; `http://127.0.0.1:49709/api/health` returned `ERR_CONNECTION_REFUSED` |
+| Relaunch | PASS |
 
-No application or numerical change is outstanding. Main remains unchanged; this
-branch is for review and clean-machine validation, not an automatic merge/release.
+### Sandbox default-HTTP-handler limitation
 
-NOT READY — BLOCKERS REMAIN
+Automatic browser opening did not work in this Sandbox session. Clicking
+**Open GERT Studio** produced the Windows message "your device needs a new app to
+open this link". Launching Edge manually and entering the same displayed loopback
+URL loaded the full application successfully. Automatic browser handoff had already
+passed on the normal Windows development host.
+
+Code inspection supports classifying this as a Sandbox/default-HTTP-app association
+limitation: the launcher's automatic opening and Open button both call
+`webbrowser.open(server.url)`. The build runtime's Windows browser controller
+delegates to `os.startfile(url)`, which uses Windows' registered URL handler. The
+backend and frontend work at the same URL when Edge is opened manually. No actual
+application or packaging defect was identified from this observation. Automatic
+handoff in the affected Sandbox is recorded as an environment limitation, not a
+passing test or a failure of GERT's UI, backend or simulation engine.
+
+No application, launcher, packaging architecture or simulation changes were made
+to work around the association issue. This update changes verification documentation
+only; the ZIP remains byte-identical to the tested release.
+
+## Remaining release caveats
+
+- Automatic opening requires a working Windows HTTP browser association. It passed
+  on the development host; this clean Sandbox required manual Edge navigation.
+- Clean-machine coverage is Windows 11 Enterprise x64 build 26100.9550. Other Windows
+  versions, read-only extraction folders and broader security-software/signing
+  behavior remain unverified. The current portable build is unsigned.
+- The user-reported manual results supplement the preserved automated evidence;
+  they were not replayed by the desktop automation tool.
+
+The application acceptance checks are complete with the Sandbox browser-association
+limitation documented. No actual application defect or numerical divergence remains
+identified. The packaging branch is ready for review/merge; it has not been merged
+into main, and this status does not publish a release.
+
+READY FOR REVIEW / MERGE
