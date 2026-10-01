@@ -58,6 +58,8 @@ Application metadata: engine `0.1.1`, reproducibility
 | Graphical launcher startup/lifecycle | Passed with browser auto-opening suppressed |
 | Offline browser demo, packaged and native | Passed with non-local requests blocked |
 | Runtime-path isolation | Passed |
+| Normal GUI launch and automatic default-browser handoff | Passed on development host; Chrome loaded the packaged loopback URL |
+| Normal launcher process elevation | Not elevated; checked the running process token |
 
 The HTTP scenarios include fixed, uniform, triangular and six Beta-PERT cases
 (interior/endpoint modes and small/large shape values), probabilistic outcome
@@ -125,10 +127,32 @@ Local generated evidence includes `dist/windows-verification.json`,
 The build clears its own frontend/PyInstaller/release outputs before recompiling;
 no previous frontend asset or packaged backend is reused.
 
+### Desktop acceptance follow-up
+
+The unchanged final ZIP was checked again: 22,245,849 bytes, SHA256
+`cf8a85d022ea4354de780fff4ade0644b4cb5a368f1024f524cd71609773ac8d`.
+Its clean build source remains `f2037d5c0fc61901bf02b8cb669dfa7fcf6006ab`;
+this follow-up changes only the verification documentation.
+
+The extracted EXE was launched normally, with no diagnostic flags. Its control
+window appeared and Chrome automatically opened the matching loopback URL. The
+browser accessibility tree confirmed the GERT Studio workspace loaded. Inspection
+of the running process token confirmed it was not elevated. The representative
+simulation response matched the previously verified result exactly. Programmatic
+shutdown removed the instance state and closed the listener.
+
+Desktop automation could read the browser but could not deliver the attempted
+Load demo click: it reported `coordinate input geometry is unavailable`. Explorer
+activation also failed. Therefore these observations do not establish double-click
+launch, interactive Exit confirmation or a complete manual acceptance run. No
+application failure was inferred from the desktop tool failure. Evidence is in
+`dist/windows-interactive-followup.json`.
+
 ## Not yet verified / remaining release gates
 
 A genuinely clean Windows machine was not available or used. Windows Sandbox is
-absent on this host. PATH isolation, bundled-module inspection and blocked browser
+absent on this host; local Hyper-V tooling and the usual VirtualBox/VMware executables
+were also not found. PATH isolation, bundled-module inspection and blocked browser
 network requests are development-host evidence, not proof on a fresh OS.
 
 The remaining gate is to test the final ZIP on a clean supported Windows machine
@@ -137,9 +161,10 @@ automatic default-browser opening and no UAC requirement, create/import a docume
 model, simulate and inspect results, export, manually exit, confirm shutdown,
 relaunch and repeat offline. Record OS version, architecture and artifact checksum.
 Other Windows versions, read-only extraction folders and clean-machine security
-software/signing behavior are not yet verified. Automated GUI runs suppress
-automatic browser opening and invoke graceful stop programmatically; manual
-default-browser handoff and Exit confirmation belong to that acceptance procedure.
+software/signing behavior are not yet verified. The original automated GUI runs
+suppressed browser opening; the follow-up verified default-browser handoff on the
+development host. Graceful stop was still programmatic. Interactive Exit confirmation
+and the complete clean-machine procedure remain unverified.
 
 No application or numerical change is outstanding. Main remains unchanged; this
 branch is for review and clean-machine validation, not an automatic merge/release.
