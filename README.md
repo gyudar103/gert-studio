@@ -37,6 +37,10 @@ are edited in the properties panel and persist in JSON; certainty is descriptive
 
 ## Verify
 
+The same application also has a [portable Windows build](docs/WINDOWS_DISTRIBUTION.md).
+See its [current verification report](docs/WINDOWS_VERIFICATION.md) for release gates.
+Docker remains separately supported; Windows users do not need Docker.
+
 With both services running:
 
 ```sh

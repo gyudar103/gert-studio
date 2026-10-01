@@ -1,0 +1,19 @@
+GERT Studio Windows distribution includes third-party software.
+
+Python: Python Software Foundation License (PSF-2.0)
+The adapted Beta-PERT sampler's CPython license is in _internal/licenses/.
+Tcl/Tk: Tcl/Tk license (BSD-style)
+OpenSSL native libraries: Apache-2.0
+PyInstaller bootloader: GPL-2.0-or-later with distribution exception
+FastAPI, Pydantic, Uvicorn, Starlette, AnyIO, h11, Click: MIT
+NetworkX: BSD-3-Clause
+React, React DOM, React Flow, bignumber.js, json-bigint: MIT
+
+The build adds LICENSES/ with available installed Python package licenses,
+the Python/Tcl/Tk license texts, and frontend dependency license texts.
+build-manifest.json records runtime/build versions and source revision.
+This notice does not replace or modify the included upstream licenses.
+
+Supplemental upstream license sources:
+https://github.com/tcltk/tcl/blob/core-8-6-12/license.terms
+https://github.com/openssl/openssl/blob/openssl-3.5.8/LICENSE.txt
