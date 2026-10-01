@@ -148,25 +148,68 @@ launch, interactive Exit confirmation or a complete manual acceptance run. No
 application failure was inferred from the desktop tool failure. Evidence is in
 `dist/windows-interactive-followup.json`.
 
+## Verified on clean Windows Sandbox
+
+Windows Sandbox was enabled with administrator consent and the required host restart
+was completed manually. The guest is Windows 11 Enterprise x64, build 26100.9550;
+the host Sandbox client is version 0.8.107.0. The older ProductName registry value
+says Windows 10, but the guest operating-system caption and build identify Windows 11.
+
+The existing release ZIP above was copied into the guest and extracted into a
+profile directory containing spaces and Hebrew characters. No Python, Node/npm,
+Git, Docker or development tools were installed in the guest. Runtime command
+inventory was empty. Networking was disabled in the Sandbox configuration and
+the guest had no network adapters. Only the release ZIP, OS-only verification scripts,
+expected JSON responses and an evidence directory were shared; no host runtime or
+repository dependency directories were mapped.
+
+The checks passed both under Sandbox's default elevated account and under the new
+standard local account `GertAcceptance`, whose test process was not elevated:
+
+- ZIP checksum, extraction and every bundled-file hash.
+- Actual packaged GUI-process startup, backend health and production asset hashes.
+- Exact complete responses for all 11 simulation scenarios (1,352 realizations),
+  including fixed, uniform, triangular and six Beta-PERT variants, outcome draws,
+  parallel/rework and documented models. Expected responses were independently
+  matched to the previous native/packaged/Docker comparison.
+- Exact draft-validation and missing-input rejection responses (13 API cases total).
+- Duplicate launch reuses the original process.
+- Graceful programmatic shutdown removes state, exits the process and closes its
+  listener; offline relaunch and a second shutdown also pass.
+- Logs are created in the user's `AppData/Local/GERT Studio` directory and the
+  successful runs contain no unexpected dependency or runtime errors.
+
+The artifact build commit is `f2037d5c0fc61901bf02b8cb669dfa7fcf6006ab`; the packaging
+branch at testing was `25e7699f4283b47d55be656d83182398e9c1aa86`, incorporating main
+`d8393058022b8a2c77a4b5e0c331a5719f8b906a`. Engine `0.1.1` and reproducibility
+`gert-v2-py312-sha256-mt19937-crmath1` match the verified responses.
+
+An initial guest test stopped the second process after health answered but before
+the launcher's own readiness check finished. This produced an exit-code-1 timeout.
+The harness was corrected to wait for that process/port's Ready log entry before
+requesting shutdown. Repeated elevated and standard-user runs passed without any
+application or release-artifact change. The initial failure evidence is retained.
+
+Local evidence is under `build/clean-windows/evidence`: `guest-result.json` and
+`launcher.log` contain the successful standard-user run; `admin-guest-result.json`
+and `admin-launcher.log` preserve the elevated run; `initial-guest-result.json` and
+`initial-launcher.log` preserve the harness timing failure. These are generated,
+ignored files, not source-controlled release artifacts.
+
 ## Not yet verified / remaining release gates
 
-A genuinely clean Windows machine was not available or used. Windows Sandbox is
-absent on this host; local Hyper-V tooling and the usual VirtualBox/VMware executables
-were also not found. PATH isolation, bundled-module inspection and blocked browser
-network requests are development-host evidence, not proof on a fresh OS.
+Interactive acceptance inside the clean guest remains pending: double-click launch,
+automatic default-browser handoff, complete browser rendering, UI model creation or
+import, current editing features, result presentation/export, and the Exit confirmation.
+The equivalent developer-host browser suite passed, but that does not replace these
+guest observations. Desktop automation currently reports `failed to activate captured
+window` after refreshing and retrying the Sandbox window; the guest remains running.
 
-The remaining gate is to test the final ZIP on a clean supported Windows machine
-without development runtimes, using a standard user: extract, double-click, observe
-automatic default-browser opening and no UAC requirement, create/import a documented
-model, simulate and inspect results, export, manually exit, confirm shutdown,
-relaunch and repeat offline. Record OS version, architecture and artifact checksum.
 Other Windows versions, read-only extraction folders and clean-machine security
-software/signing behavior are not yet verified. The original automated GUI runs
-suppressed browser opening; the follow-up verified default-browser handoff on the
-development host. Graceful stop was still programmatic. Interactive Exit confirmation
-and the complete clean-machine procedure remain unverified.
+software/signing behavior are not yet verified. No application change has been made
+during this Sandbox validation. The ZIP remains byte-identical to the tested release.
 
 No application or numerical change is outstanding. Main remains unchanged; this
 branch is for review and clean-machine validation, not an automatic merge/release.
 
-READY FOR CLEAN-MACHINE RELEASE VALIDATION
+NOT READY — BLOCKERS REMAIN
