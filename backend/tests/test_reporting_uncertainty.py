@@ -142,6 +142,20 @@ def test_order_statistic_endpoints_are_exact_with_ties_and_large_decimals():
     assert ci["lower"] == ci["upper"] == str(value.numerator//value.denominator)+".123456789123456789"
 
 
+@pytest.mark.parametrize("values,expected", [
+    ([9], ["9"] * 9),
+    ([0, 10, 20], ["1", "2", "4", "6", "10", "14", "16", "18", "19"]),
+    ([0, 10, 20, 30], ["1.5", "3", "6", "9", "15", "21", "24", "27", "28.5"]),
+])
+def test_type7_complete_percentile_family_singleton_odd_even(values, expected):
+    runs = [SimpleNamespace(status="terminal", time=F(value), terminal_node_id="end",
+                            counts=lambda _: {"started": 1, "completed": 1, "cancelled": 0, "unfinished": 0})
+            for value in values]
+    duration = summarize(model(), runs)["terminal_duration"]
+    assert [duration[key] for key in PERCENTILES] == expected
+    assert duration["median"] == duration["p50"] == expected[4]
+
+
 def test_report_sample_populations_percentiles_and_lifecycle_preservation():
     statuses = ["terminal","terminal","deadlock","cutoff_time","ambiguous_resource_competition","ambiguous_terminal","invalid_runtime_state"]
     starts = [0,2,1,0,0,3,1]
