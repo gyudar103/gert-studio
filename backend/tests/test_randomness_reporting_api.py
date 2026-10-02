@@ -92,7 +92,10 @@ def test_final_interval_preserves_declared_values(last):
 def test_zero_terminal_stats_and_status_denominator():
     result = simulate(model(activities=[activity(requirements={"token": "2"})]), settings(realizations=3))
     summary = result["summary"]
-    assert summary["statuses"]["deadlock"] == {"count": 3, "denominator": 3, "probability": "1"}
+    assert {key: summary["statuses"]["deadlock"][key] for key in ("count", "denominator", "probability")} == {
+        "count": 3, "denominator": 3, "probability": "1"}
+    assert summary["statuses"]["deadlock"]["standard_error"] == "0"
+    assert summary["statuses"]["deadlock"]["confidence_interval"]["upper"] == "1"
     assert summary["terminal_duration"]["mean"] is None
     assert summary["terminal_duration"]["sample_size"] == 0
     assert summary["terminal_outcomes"]["end"]["denominator"] == 3

@@ -150,6 +150,20 @@ def test_complete_demo_reference_and_invariance():
     # reference hash for every existing field rather than repinning engine output.
     del legacy_result["validation"]["draft_valid"]
     del legacy_result["validation"]["simulation_ready"]
+    # Pin new uncertainty serialization as well as retaining the original hash.
+    extended_json = json.dumps(legacy_result, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(extended_json).hexdigest() == "f246c0dfe1f8b03e6b882c79ad6b39638afb021b4fc3896e3189d824d5d98925"
+    summary = legacy_result["summary"]
+    for entry in [*summary["statuses"].values(), *summary["terminal_outcomes"].values()]:
+        del entry["standard_error"]
+        del entry["confidence_interval"]
+    for key in ("p5", "p10", "p20", "p30", "p70", "standard_deviation", "sample_standard_deviation", "mean_standard_error",
+                "mean_confidence_interval", "quantile_confidence_intervals"):
+        del summary["terminal_duration"][key]
+    for entry in summary["activities"].values():
+        for key in ("standard_deviation_starts", "sample_standard_deviation_starts", "mean_starts_standard_error", "mean_starts_confidence_interval",
+                    "probability_at_least_one_start_standard_error", "probability_at_least_one_start_confidence_interval"):
+            del entry[key]
     canonical_json = json.dumps(legacy_result, sort_keys=True, separators=(",", ":")).encode()
     # Pins every duration, instance, timestamp, outcome, inventory and aggregate.
     assert hashlib.sha256(canonical_json).hexdigest() == "0990d8f3a875d902e3b7bcd96a2d5789d890f95bac4606f1cb35ac0802edae5e"

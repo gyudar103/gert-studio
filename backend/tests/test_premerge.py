@@ -103,10 +103,13 @@ def test_mixed_status_reporting_uses_all_runs_and_only_terminal_durations():
     report = summarize(m, runs)
     assert report["terminal_outcomes"]["end"]["count"] == 2
     assert report["terminal_outcomes"]["end"]["denominator"] == 6
-    assert report["terminal_duration"] == {
+    expected = {
         "sample_size": 2, "conditioning": "terminal runs observed within configured limits",
         "mean": "2", "median": "2", "p50": "2", "p80": "2.6",
         "p90": "2.8", "p95": "2.9", "min": "1", "max": "3"}
+    assert {key: report["terminal_duration"][key] for key in expected} == expected
+    assert report["terminal_duration"]["standard_deviation"] == "1"
+    assert report["terminal_duration"]["mean_standard_error"] == "1"
     assert sum(v["count"] for v in report["statuses"].values()) == 6
 
 
