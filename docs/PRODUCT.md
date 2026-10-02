@@ -2,6 +2,9 @@
 
 Revision: 2026-09-14 — synchronized specification for Version 0.1.
 
+2026-10-02 extension: release 0.2.0 adds resizable panels and statistical uncertainty
+and makes portable Windows the primary distribution; the Version 0.1 model remains.
+
 Version 0.1 uses the concurrent resource-flow model defined in MODEL.md. Costs and capacity scheduling remain future features.
 
 ## 1. Product Name
@@ -245,6 +248,21 @@ Observed progress may eventually update duration distributions and outcome proba
 Use an explicitly versioned, human-readable structured format independent of the editor. Canonical top-level concepts are `schema_version`, `project`, `item_types`, `nodes`, and `activities`; simulation settings should be explicit. Outcome connections are stored under their parent activities rather than as an unrelated sequential edge model.
 
 Export and reload must preserve model semantics. Support deterministic serialization where practical, and explicit migrations where compatibility cannot be preserved.
+
+**Export JSON** retains the existing model-only format when no current simulation
+result exists, including incomplete drafts. With a current result, it exports a
+versioned `gert-studio-simulation-snapshot` envelope (`file_version: "0.1"`) containing
+`model`, `simulation_settings`, and `simulation_result`. The settings are those used
+for that run; the result preserves the actual root seed, engine/reproducibility
+versions, and all returned statistics and uncertainty fields with exact numeric
+precision. These reporting fields do not extend the mathematical Model schema.
+
+**Import JSON** accepts legacy models and snapshots. A snapshot's contained model
+uses the established model validation path. Valid saved settings and results are
+restored together, without running a simulation, and Results identifies them as
+imported saved results. Malformed snapshots leave the current workspace intact.
+Model or settings edits that invalidate local results also invalidate imported
+results. Results remain outside model Undo history; panel layout is never exported.
 
 ## 22. Deployment
 

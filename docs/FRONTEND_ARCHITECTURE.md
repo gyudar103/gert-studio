@@ -74,7 +74,7 @@ duplicate requests while either operation is running.
 
 ## JSON files
 
-`files.ts` exports only the mathematical model, with decimal fields stored as
+Without current results, `files.ts` exports only the mathematical model, with decimal fields stored as
 strings, preserving documentation and explicit nulls. Structurally valid incomplete
 drafts pass import validation; invalid supplied values do not. A lexical pass quotes number tokens while
 leaving complete JSON string tokens untouched. The existing strict `json-bigint`
@@ -90,8 +90,16 @@ An invalid file never replaces the current model. Its diagnostics are explicitly
 labeled as file diagnostics and do not navigate the unrelated current graph.
 Valid imports ask before replacing an existing network and retain backend warnings.
 Canvas positions are regenerated; optional imported `ui_metadata` is deliberately
-excluded from the mathematical workspace. Existing run settings stay separate and
-unchanged. Exported files do not contain layout or run settings.
+excluded from the mathematical workspace. Legacy model imports leave existing run
+settings unchanged. Model-only files contain neither layout nor run settings.
+
+With current results, export uses the versioned simulation-snapshot envelope defined
+in PRODUCT section 21. Import validates the contained model through the same backend
+path and checks saved settings/report structure before installing any state. It
+restores the used settings and exact report, including BigInt seeds and decimal
+strings, without a simulation request. Imported provenance is visible in Results.
+Settings and derived results stay outside model history; normal model/settings edits
+clear saved results. Snapshots never include panel preferences or canvas positions.
 
 The response parser uses null-prototype dictionaries and preserves all legal IDs,
 including `constructor` and `__proto__`, rather than rejecting them as object keys.

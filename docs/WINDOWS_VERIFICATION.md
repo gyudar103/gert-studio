@@ -1,5 +1,9 @@
 # Windows refresh verification — 2026-10-01
 
+This is historical evidence for the source and artifact identified below. Its
+Sandbox results do not certify the later 0.2.0 Windows preview artifact; that
+candidate requires its own packaged verification and independent release review.
+
 Source-of-truth main: `d8393058022b8a2c77a4b5e0c331a5719f8b906a`.
 Previous packaging branch/build: `e148ec3a4673d9ecabf5a3ebb148bfbb169e1241`.
 

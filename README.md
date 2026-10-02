@@ -1,4 +1,4 @@
-# GERT Studio Version 0.1 prototype
+# GERT Studio 0.2.0 Windows preview
 
 A browser editor and Python simulator for stochastic project networks: parallel
 activities, named consumable items, synchronization, probabilistic outcomes and
@@ -34,9 +34,11 @@ Use **New blank** to create your own model. Add items, Start/State/Terminal node
 and connect node handles to create activities. Edit requirements and alternative
 outcomes in Properties. **Fit View** brings the network into view as it grows.
 
-**Export JSON** downloads the mathematical model. **Import JSON** validates a file
-with the backend before replacing the current network. Decimal values retain their
-exact text. Layout is regenerated on import; simulation settings stay separate.
+**Export JSON** downloads the mathematical model, or a simulation snapshot when
+current results exist. Snapshots include the used settings, exact seed, versions,
+and all results. **Import JSON** validates the model before replacing the network;
+snapshots also restore saved settings/results without rerunning. Results identifies
+imported data. Decimal values retain their exact text; layout is regenerated.
 Export before refreshing: model data has no database or automatic browser persistence.
 Desktop panel separators resize the Model, Canvas, Properties, and Analysis areas;
 panel sizes alone persist locally. Use **Reset layout** to restore default sizes.

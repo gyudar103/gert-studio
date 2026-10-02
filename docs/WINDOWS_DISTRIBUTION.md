@@ -5,7 +5,8 @@ same GERT Studio application and is not required for normal release acceptance.
 The Windows launcher bundles Python, the backend and production frontend; ordinary
 users need no Python, Node, npm, Git, Docker, build tools or administrator access.
 There is no cloud dependency. See [verification status](WINDOWS_VERIFICATION.md)
-before treating a build as a release: a clean Windows machine remains a separate gate.
+for recorded evidence. Fresh-machine verification is reported separately for each
+artifact; developer-host checks do not establish it.
 
 ## Use
 
@@ -175,7 +176,7 @@ commit generated binaries. Any changed build input requires a new candidate/buil
 and renewed review before publication. A fresh-machine result applies only to the
 artifact actually tested, not automatically to later builds.
 
-## Clean-machine release gate
+## Fresh-machine verification
 
 Use a fresh Windows 10/11 x64 VM/Sandbox with a browser and without Python, Node/npm,
 Git or Docker. Copy only the release ZIP. Record Windows build, architecture,
