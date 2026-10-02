@@ -29,7 +29,9 @@ outcomes in Properties. **Fit View** brings the network into view as it grows.
 **Export JSON** downloads the mathematical model. **Import JSON** validates a file
 with the backend before replacing the current network. Decimal values retain their
 exact text. Layout is regenerated on import; simulation settings stay separate.
-Export before refreshing: there is no database or automatic browser persistence.
+Export before refreshing: model data has no database or automatic browser persistence.
+Desktop panel separators resize the Model, Canvas, Properties, and Analysis areas;
+panel sizes alone persist locally. Use **Reset layout** to restore default sizes.
 Structurally valid drafts can be exported and imported with explicit `null` duration
 distributions, parameters, and probabilities. Invalid supplied values still block
 import. Complete missing inputs before simulation. Node, duration, and outcome notes

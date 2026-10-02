@@ -191,12 +191,18 @@ estimate. Terminal duration statistics use only terminal realizations.
 
 Every required status and terminal node appears, including zero counts, with N as
 denominator. Terminal statistics include sample size, conditioning, mean, median/P50,
-P80/P90/P95, min and max; unavailable values are null. Quantiles use linear interpolation
+P5/P10/P20/P30/P70/P80/P90/P95, population SD, min and max; unavailable values are null. Quantiles use linear interpolation
 at (n-1)p (type 7). Means and probabilities that have recurring decimal expansions
 are formatted at 34 significant decimal digits using a fresh ROUND_HALF_EVEN context
 independent of the caller's Decimal context; engine state
 and exact ordering are never rounded by reporting. Quantiles/min/max retain exact
 terminating-decimal output.
+
+Reporting also exposes Monte Carlo SE and 95% Wilson intervals for terminal/status
+and activity-start probabilities, sample-variance mean SE and 95% Student-t intervals
+for duration/starts, and nonparametric binomial/order-statistic percentile intervals.
+Duration samples contain terminal runs only; activity samples include every requested
+realization and zero starts. These additions do not change simulation or RNG behavior.
 
 Per-activity totals and per-realization counters distinguish starts, completions,
 cancellations, unfinished work and its reasons. Frequency metrics use starts. Truncated

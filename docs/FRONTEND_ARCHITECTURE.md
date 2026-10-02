@@ -13,6 +13,11 @@ nodes, and activities. `layout` stores canvas positions separately. Selection,
 validation diagnostics, simulation results, busy state, and the simulation settings
 form are UI state in `App`; they are never included in `apiModel`.
 
+Resizable desktop panel dimensions are separate UI preferences, persisted locally
+with versioning and safe clamping. They do not enter `Workspace`, model undo history,
+exports, or simulation requests. Accessible separators and Reset layout control these
+preferences; narrow layouts retain their responsive behavior.
+
 The graph is a projection of the model. Node cards represent Start, State, and
 Terminal nodes. Each activity is one card with one source edge and one edge for every
 outcome. Alternative outcomes therefore remain branches of a single activity

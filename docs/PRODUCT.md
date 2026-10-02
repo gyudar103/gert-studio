@@ -88,6 +88,17 @@ Probabilities belong to outcomes within an activity, not to the set of activitie
 
 Show outcome probabilities; deadlock, ambiguity, and cutoff frequencies; terminal completion-time distributions; and activity execution statistics. Show sample sizes and conditioning explicitly. Never label a cutoff as proven nontermination or a simulated deadlock as a modeled failure terminal.
 
+### 6.4 Resizable Studio workspace
+
+On desktop, draggable vertical separators resize Model, Canvas, and Properties;
+a horizontal separator resizes the modeling workspace and Validation/Results.
+Keep usable minimum panel dimensions and clamp sizes when the window shrinks.
+Separators support keyboard arrows, focus indication, and accessible orientation
+and current/minimum/maximum values. Narrow layouts may hide desktop separators.
+Provide Reset layout. Persist versioned panel sizes locally, safely ignoring malformed
+data and clamping obsolete sizes. These preferences are UI-only: they never enter
+model JSON, simulation requests/results, RNG behavior, or model Undo history.
+
 ## 7. Core Modeling Philosophy and Authority
 
 The serializable mathematical model is independent of the engine and interface. The engine validates and simulates it; the UI constructs and displays it.
@@ -123,9 +134,47 @@ Discrete-event Monte Carlo with configurable realization count (for example 1,00
 ### 8.7 Initial Metrics
 
 - Counts and probabilities of each terminal outcome, deadlocks, ambiguities, and cutoffs, using all requested realizations N as the denominator.
-- Mean, median/P50, P80, P90, P95, and observed minimum/maximum duration among terminal runs, labeled as conditional on reaching a terminal within the run limits.
+- Mean, descriptive population SD, P5, P10, P20, P30, median/P50, P70, P80, P90, P95, and observed minimum/maximum duration among terminal runs, labeled as conditional on reaching a terminal within the run limits. Percentile point estimates retain Hyndman–Fan Type 7: linear interpolation at `(n - 1) * p`.
 - Mean activity execution count and probability of at least one execution, with the precise counting convention resolved in MODEL.md.
 - Sample sizes and cutoff information alongside statistics; no misleading unconditional completion-time claim.
+
+Descriptive SD uses population variance (`ddof=0`): no observations gives null and
+one observation gives zero. Activity `standard_deviation_starts` uses start counts
+from all requested realizations, including zeros and every run status. Duration
+`standard_deviation` and all duration statistics use only terminal runs; their
+`sample_size` excludes cutoffs, deadlocks, ambiguities, and invalid-runtime runs.
+
+Report statistical uncertainty at 95% confidence, separately from descriptive SD:
+
+- Each terminal/status probability and activity probability of at least one start
+  uses exact integer successes `k` and all requested realizations `N`: estimate
+  `k/N`, Monte Carlo SE `sqrt(p_hat * (1-p_hat) / N)`, and a 95% Wilson score CI
+  bounded by [0,1], including at zero/all successes. Use a documented fixed
+  two-sided normal critical constant; do not substitute a Wald interval.
+- Mean duration and mean starts use their respective samples above. For `n>=2`,
+  Monte Carlo SE is `sqrt(sample_variance/n)` with `ddof=1`; the 95% Student-t CI
+  is `mean ± t_(0.975,n-1) * SE`. For `n=0` the mean/SE/CI are unavailable;
+  for `n=1` the mean exists but SE/CI are unavailable. Clip negative lower endpoints
+  to zero for these nonnegative quantities and explicitly identify support clipping.
+- Each completion-time percentile has a separate 95% nonparametric binomial/order-
+  statistic CI using equal-tailed binomial rank bounds and observed sorted values.
+  Keep Type-7 point estimates unchanged. Missing finite bounds are null, with a
+  small-sample explanation, particularly for P5/P95. Do not bootstrap or derive
+  quantile uncertainty from duration SD.
+
+SD describes observed spread; SE describes Monte Carlo uncertainty of an estimate;
+CI gives a method-specific confidence interval. Label Wilson, Student-t, and
+nonparametric quantile methods distinctly. Do not assign generic CIs to min, max,
+descriptive SD, or exact lifecycle totals. Expose uncertainty through compact,
+accessible details without excessively wide tables. Numeric estimates and CI
+endpoints use the existing three-significant-digit/full-precision toggle; unavailable
+values display as unavailable, never zero.
+
+Reporting must be deterministic and consume no RNG. Precisely document numerical
+precision, rounding/serialization, Student-t evaluation and supported degrees of
+freedom, and quantile rank inequalities/indexing (including equality and missing
+bounds). New fields are additive; simulation semantics, existing estimates, and
+reproducibility streams remain unchanged.
 
 Per-terminal conditional duration statistics are an important extension, followed by activity timing and item-arrival metrics. No Phase 1 cost metrics are required.
 
