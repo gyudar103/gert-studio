@@ -30,7 +30,28 @@ software policy. Do not run directly from inside the ZIP.
 
 Build-time prerequisites: Windows x64, Python 3.12 with pip and Tcl/Tk, Node 22 with
 npm on PATH. Git records the source revision but is not needed by the EXE.
-The tested build tools are Python 3.12.14, Node 22.19.0 and PyInstaller 6.22.3.
+The tested local build tools are Python 3.12.14, Node 22.19.0 and PyInstaller 6.22.3.
+
+### GitHub Actions
+
+The **Windows portable release** workflow (`.github/workflows/windows-portable.yml`)
+uses a GitHub-hosted Windows runner and calls `build-windows.ps1` unchanged. Run it
+manually from the Actions page to build current `main`. Publishing a GitHub Release
+builds its exact tag, checks that its commit belongs to `main`, and attaches the ZIP
+and checksum to that Release. Existing assets are not overwritten; a duplicate-name
+upload fails rather than replacing a previously reviewed artifact.
+
+Both triggers upload `GERT-Studio-Windows.zip` and `.zip.sha256` as a run artifact
+named with the resolved source SHA. Generated binaries remain outside Git. The
+existing manifest records that actual checked-out commit and tool versions; the
+workflow rejects a dirty or mismatched manifest. CI installs Python `3.12` x64
+(the available Windows patch, not necessarily the locally tested 3.12.14) and Node
+22.19.0. At workflow introduction (2026-10-03), GitHub's available Python Windows
+distributions for this series stop at 3.12.10. The packaging script continues to
+enforce Python 3.12 and Node 22.
+
+A successful Actions build is build/smoke-test evidence. It does not complete the
+separate clean-machine verification gate or establish full Windows release validation.
 Network access is needed to install dependencies, not to run the finished app.
 
 From the repository root:

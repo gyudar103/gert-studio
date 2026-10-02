@@ -1,0 +1,105 @@
+name: Windows portable release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out main or the published mainline release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || 'refs/heads/main' }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record and verify source commit
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          $sourceSha = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source commit' }
+          if ($env:EVENT_NAME -eq 'release' -and $sourceSha -ne $env:EXPECTED_RELEASE_SHA) {
+            throw 'Checked-out release tag differs from the published event commit'
+          }
+          git merge-base --is-ancestor $sourceSha refs/remotes/origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release source must belong to main' }
+          "sha=$sourceSha" >> $env:GITHUB_OUTPUT
+
+      - name: Set up required Python series
+        id: python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Set up documented Node version
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.19.0'
+          package-manager-cache: false
+
+      - name: Build using the existing Windows packaging process
+        env:
+          BUILD_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: .\build-windows.ps1 -Python $env:BUILD_PYTHON -Npm npm.cmd
+
+      - name: Verify output traceability
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          foreach ($path in @('dist/GERT-Studio-Windows.zip', 'dist/GERT-Studio-Windows.zip.sha256')) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing build output: $path" }
+          }
+          $manifest = Get-Content -LiteralPath dist/GERT-Studio-Windows/build-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_commit -ne $env:SOURCE_SHA -or $manifest.source_dirty) {
+            throw 'Build manifest must identify the clean checked-out source commit'
+          }
+          "Source commit: $env:SOURCE_SHA. Built by the existing packaging process; clean-machine verification remains a separate release gate." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload portable ZIP and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-portable-${{ steps.source.outputs.sha }}
+          path: |
+            dist/GERT-Studio-Windows.zip
+            dist/GERT-Studio-Windows.zip.sha256
+          if-no-files-found: error
+
+  attach-to-release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download the exact build outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-portable-${{ needs.build.outputs.source_sha }}
+          path: release-assets
+
+      - name: Attach files to the published Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload $env:RELEASE_TAG release-assets/GERT-Studio-Windows.zip release-assets/GERT-Studio-Windows.zip.sha256 --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed; existing assets are never overwritten' }
