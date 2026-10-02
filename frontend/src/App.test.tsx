@@ -3,11 +3,18 @@ import {fireEvent,render,screen,within,waitFor} from '@testing-library/react';
 import App from './App';
 import {Results} from './components/Analysis';
 import {demoWorkspace} from './demo';
-import type {SimulationResult} from './types';
+import {resultsFixture} from './test/resultsFixture';
+import {snapshotFixture} from './test/snapshotFixture';
+import {exportModel} from './files';
 vi.mock('./components/Canvas',()=>({default:()=> <div>Canvas projection</div>})); // Real canvas exercised in browser integration tests.
 const fetchMock=vi.fn();
 beforeEach(()=>{vi.stubGlobal('fetch',fetchMock);fetchMock.mockReset();vi.spyOn(window,'confirm').mockReturnValue(true);});
 const click=(name:string)=>fireEvent.click(screen.getByRole('button',{name}));
+function uploadJSON(text:string) {
+  const file=new File([text],'snapshot.json',{type:'application/json'});
+  Object.defineProperty(file,'text',{value:async()=>text});
+  fireEvent.change(screen.getByLabelText('Import model JSON'),{target:{files:[file]}});
+}
 function demo(){render(<App/>);click('Load demo');}
 describe('modeling workspace',()=>{
   it('renders a blank workspace with explicit simulation settings',()=>{
@@ -46,7 +53,7 @@ describe('modeling workspace',()=>{
   it('handles backend unavailable and prevents duplicate requests',async()=>{
     let reject!:(reason:Error)=>void;fetchMock.mockReturnValue(new Promise((_,r)=>{reject=r;}));
     demo();click('Run Simulation');expect(screen.getByRole('button',{name:'Running simulation…'})).toBeDisabled();expect(fetchMock).toHaveBeenCalledTimes(1);reject(new Error('network'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the backend');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the backend. Check that GERT Studio is running, then retry.');
   });
   it('sends edited decimal strings to the backend',async()=>{
     fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>' {"valid":true,"diagnostics":[]}'});
@@ -60,17 +67,68 @@ describe('modeling workspace',()=>{
   });
 });
 it('renders conditioned results, separate statuses, lifecycle and the exact returned seed',()=>{
-  const f={count:1,denominator:2,probability:'0.5'};
-  const result:SimulationResult={root_seed:340282366920938463463374607431768211455n,engine_version:'0.1.0',reproducibility_version:'test',validation:{valid:true,diagnostics:[]},runs:[],summary:{realizations:2,statuses:{terminal:f,cutoff_time:f},terminal_outcomes:{success:{...f,outcome_code:'success'}},terminal_duration:{sample_size:1,conditioning:'terminal only',mean:'18.341252780000000000000001',median:'3',p50:'3',p80:'3',p90:'3',p95:'3',min:'3',max:'3'},activities:{test:{mean_starts:'1',probability_at_least_one_start:'1',started:2,completed:1,cancelled:0,unfinished_at_run_end:1,unfinished_at_cutoff:1,unfinished_at_ambiguity:0,unfinished_at_invalid_runtime:0}}}};
+  const result=resultsFixture();
     const before=structuredClone(result);
     Object.freeze(result.summary.terminal_duration);
     render(<Results result={result} model={demoWorkspace().model}/>);expect(screen.getByText(/Completion time · terminal runs only/)).toBeVisible();expect(screen.getByText('Time cutoff')).toBeVisible();expect(screen.getByText('340282366920938463463374607431768211455')).toBeVisible();expect(screen.getByRole('columnheader',{name:'Unfinished'})).toBeVisible();
-    const mean=screen.getByRole('button',{name:'18.3'});
+    const mean=screen.getAllByRole('button',{name:'18.3'})[0];
     for(let i=0;i<3;i++) {
       fireEvent.click(mean);expect(mean.textContent?.trim()).toBe(before.summary.terminal_duration.mean);
       fireEvent.click(mean);expect(mean.textContent?.trim()).toBe('18.3');
     }
     expect(result).toEqual(before);expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it('imports saved results and actual settings without running simulation or adding Undo history',async()=>{
+  const {workspace,result}=snapshotFixture();
+  fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>'{"valid":true,"diagnostics":[]}'});
+  render(<App/>);uploadJSON(exportModel(workspace,result));
+  expect(await screen.findByText('Imported saved results · No simulation was rerun.')).toBeVisible();
+  expect(screen.getByLabelText(/^Seed/)).toHaveValue(String(result.root_seed));
+  expect(screen.getByLabelText(/^Realizations/)).toHaveValue('2');
+  expect(screen.getByLabelText(/^Max simulation time/)).toHaveValue('100');
+  expect(screen.getByRole('button',{name:'Undo'})).toBeDisabled();
+  expect(fetchMock).toHaveBeenCalledTimes(1);expect(fetchMock.mock.calls[0][0]).toBe('/api/models/validate');
+  fireEvent.click(screen.getAllByRole('button',{name:'18.3'})[0]);
+  expect(screen.getByRole('button',{name:'18.341252780000000000000001'})).toBeVisible();
+});
+
+it.each(['model','settings'])('clears imported results after %s edits, and Undo never restores results',async kind=>{
+  const {workspace,result}=snapshotFixture();
+  fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>'{"valid":true,"diagnostics":[]}'});
+  render(<App/>);uploadJSON(exportModel(workspace,result));
+  await screen.findByText('Imported saved results · No simulation was rerun.');
+  fireEvent.change(screen.getByLabelText(kind==='model'?'Project name':/^Realizations/),{target:{value:kind==='model'?'Edited':'3'}});
+  expect(screen.queryByText('Imported saved results · No simulation was rerun.')).not.toBeInTheDocument();
+  expect(screen.getByText('No simulation results yet.')).toBeVisible();
+  if(kind==='model') {click('Undo');expect(screen.getByLabelText('Project name')).toHaveValue(workspace.model.project.name);expect(screen.getByText('No simulation results yet.')).toBeVisible();}
+  else expect(screen.getByRole('button',{name:'Undo'})).toBeDisabled();
+});
+
+it('rejects malformed snapshot atomically while preserving current model, settings and saved results',async()=>{
+  const {workspace,result}=snapshotFixture();
+  fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>'{"valid":true,"diagnostics":[]}'});
+  render(<App/>);uploadJSON(exportModel(workspace,result));
+  await screen.findByText('Imported saved results · No simulation was rerun.');
+  const broken=structuredClone(result);broken.summary.terminal_duration.mean={bad:1};
+  const changed=structuredClone(workspace);changed.model.project.name='Must not replace';
+  uploadJSON(exportModel(changed,broken));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Cannot import');
+  expect(screen.getByLabelText('Project name')).toHaveValue(workspace.model.project.name);
+  expect(screen.getByLabelText(/^Seed/)).toHaveValue(String(result.root_seed));
+  expect(screen.getByText('Imported saved results · No simulation was rerun.')).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it('rejects a backend-invalid contained model and keeps current editor and settings',async()=>{
+  const {workspace,result}=snapshotFixture();
+  fetchMock.mockResolvedValue({ok:true,status:200,text:async()=>'{"valid":false,"diagnostics":[{"severity":"error","code":"schema","message":"Invalid snapshot model","path":[]}]}'});
+  demo();const currentSeed=(screen.getByLabelText(/^Seed/) as HTMLInputElement).value;
+  const currentName=(screen.getByLabelText('Project name') as HTMLInputElement).value;
+  uploadJSON(exportModel(workspace,result));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Import not loaded');
+  expect(screen.getByLabelText('Project name')).toHaveValue(currentName);expect(screen.getByLabelText(/^Seed/)).toHaveValue(currentSeed);
+  expect(screen.getByText(/These diagnostics refer to the rejected import/)).toBeVisible();
 });
 
 it('undoes model edits in order and leaves unavailable shortcuts alone',()=>{

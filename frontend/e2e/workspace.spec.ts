@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {demoWorkspace} from '../src/demo';
+import {exactJSON} from '../src/api';
 
 test('load demo → validate → simulate → export/import → reproduce results',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -18,12 +19,24 @@ test('load demo → validate → simulate → export/import → reproduce result
   await expect(page.getByText('20260914',{exact:true})).toBeVisible();
   const fullMean=JSON.parse(original).summary.terminal_duration.mean;
   const compactMean=String(Number(Number(fullMean).toPrecision(3)));
-  const mean=page.locator('.metrics > div').filter({has:page.getByText('MEAN',{exact:true})}).getByRole('button');
+  const mean=page.locator('.metrics > div').filter({has:page.getByText('Mean',{exact:true})}).getByRole('button');
   await expect(mean).toHaveText(compactMean);
   for(let i=0;i<3;i++) {
     await mean.click();await expect(mean).toHaveText(fullMean);await expect(mean).toHaveAttribute('aria-pressed','true');
     await mean.click();await expect(mean).toHaveText(compactMean);await expect(mean).toHaveAttribute('aria-pressed','false');
   }
+  const duration=JSON.parse(original).summary.terminal_duration;
+  const uncertainty=page.locator('.completion-results details');
+  await uncertainty.locator('summary').focus();await page.keyboard.press('Enter');
+  await expect(uncertainty.getByText('Sample SD (ddof=1)',{exact:true})).toBeVisible();
+  await expect(uncertainty.getByText('95% Student-t CI',{exact:true})).toBeVisible();
+  await expect(uncertainty.getByText('95% nonparametric quantile CI',{exact:true})).toBeVisible();
+  const upper=uncertainty.locator('dl').first().getByLabel('Upper bound').getByRole('button');
+  await upper.click();await expect(upper).toHaveText(duration.mean_confidence_interval.upper);
+  await upper.click();await expect(upper).toHaveAttribute('aria-pressed','false');
+  const probability=page.getByLabel('Reached a terminal probability uncertainty');
+  await probability.click();
+  await expect(probability.locator('..').getByText('95% Wilson CI',{exact:true})).toBeVisible();
   expect(simulationRequests).toBe(1);
   await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeDisabled();
   const downloadEvent=page.waitForEvent('download');
@@ -31,10 +44,17 @@ test('load demo → validate → simulate → export/import → reproduce result
   const download=await downloadEvent;
   const stream=await download.createReadStream();
   let exported='';for await(const chunk of stream!) exported+=chunk.toString();
-  expect(JSON.parse(exported)).toEqual(demoWorkspace().model);
+  const snapshot=JSON.parse(exported);
+  expect(snapshot.file_type).toBe('gert-studio-simulation-snapshot');
+  expect(snapshot.file_version).toBe('0.1');
+  expect(snapshot.model).toEqual(demoWorkspace().model);
+  expect(snapshot.simulation_settings).toEqual(JSON.parse(original).settings);
+  expect(snapshot.simulation_result).toEqual(JSON.parse(original));
   page.on('dialog',dialog=>dialog.accept());
   await page.getByLabel('Import model JSON').setInputFiles({name:'demo.json',mimeType:'application/json',buffer:Buffer.from(exported)});
-  await expect(page.getByText('Model valid',{exact:true})).toBeVisible();
+  await expect(page.getByText('Imported saved results · No simulation was rerun.',{exact:true})).toBeVisible();
+  expect(simulationRequests).toBe(1);
+  await expect(mean).toHaveText(compactMean);
   await expect(page.getByRole('button',{name:'Run Simulation',exact:true})).toBeEnabled();
   const repeat=page.waitForResponse(r=>r.url().endsWith('/api/simulate'));
   await page.getByRole('button',{name:'Run Simulation',exact:true}).click();
@@ -66,6 +86,35 @@ test('rejects invalid imports without replacing the editor and preserves numeric
   await page.getByLabel('Import model JSON').setInputFiles({name:'broken.json',mimeType:'application/json',buffer:Buffer.from('{')});
   await expect(page.getByRole('alert')).toContainText('Cannot import JSON');
   await expect(page.getByLabel('Project name')).toHaveValue(fixture.project.name);
+});
+
+test('snapshot preserves large seeds and precise reports, restores without rerun and invalidates on edits',async({page})=>{
+  let requests=0;page.on('request',r=>{if(r.url().endsWith('/api/simulate')) requests++;});
+  page.on('dialog',d=>d.accept());
+  await page.goto('/');await page.getByRole('button',{name:'Load demo',exact:true}).click();
+  const seed='340282366920938463463374607431768211455';
+  await page.getByLabel(/^Seed/).fill(seed);await page.getByLabel(/^Realizations/).fill('2');
+  const response=page.waitForResponse(r=>r.url().endsWith('/api/simulate'));
+  await page.getByRole('button',{name:'Run Simulation',exact:true}).click();
+  const original=exactJSON.parse(await(await response).text());
+  const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON',exact:true}).click();
+  const stream=await(await downloadEvent).createReadStream();let exported='';for await(const chunk of stream!) exported+=chunk.toString();
+  expect(exactJSON.parse(exported).simulation_result).toEqual(original);
+  await page.getByRole('button',{name:'New blank',exact:true}).click();
+  await page.getByLabel('Import model JSON').setInputFiles({name:'saved.json',mimeType:'application/json',buffer:Buffer.from(exported)});
+  await expect(page.getByText('Imported saved results · No simulation was rerun.',{exact:true})).toBeVisible();
+  await expect(page.getByLabel(/^Seed/)).toHaveValue(seed);await expect(page.getByText(seed,{exact:true})).toBeVisible();expect(requests).toBe(1);
+  const again=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON',exact:true}).click();
+  const againStream=await(await again).createReadStream();let saved='';for await(const chunk of againStream!) saved+=chunk.toString();
+  expect(exactJSON.parse(saved).simulation_result).toEqual(original);
+  const malformed=exactJSON.parse(exported);malformed.simulation_result.summary.terminal_duration.p95={bad:true};
+  await page.getByLabel('Import model JSON').setInputFiles({name:'broken.json',mimeType:'application/json',buffer:Buffer.from(exactJSON.stringify(malformed))});
+  await expect(page.getByRole('alert')).toContainText('Cannot import');await expect(page.getByText('Imported saved results · No simulation was rerun.',{exact:true})).toBeVisible();expect(requests).toBe(1);
+  await page.getByLabel('Project name').fill('Edited');await expect(page.getByText('No simulation results yet.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.getByText('No simulation results yet.',{exact:true})).toBeVisible();
+  await page.getByLabel('Import model JSON').setInputFiles({name:'saved.json',mimeType:'application/json',buffer:Buffer.from(exported)});
+  await expect(page.getByText('Imported saved results · No simulation was rerun.',{exact:true})).toBeVisible();
+  await page.getByLabel(/^Realizations/).fill('3');await expect(page.getByText('No simulation results yet.',{exact:true})).toBeVisible();expect(requests).toBe(1);
 });
 
 test('constructs a deterministic network through forms and canvas connections',async({page})=>{
@@ -104,7 +153,12 @@ test('constructs a deterministic network through forms and canvas connections',a
   await page.getByRole('button',{name:'Validate',exact:true}).click();await expect(page.getByText('Model valid',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Run Simulation',exact:true}).click();
   await expect(page.getByText('3 realizations',{exact:true})).toBeVisible();
-  await expect(page.locator('.metrics').getByText('0.3',{exact:true})).toHaveCount(7);
+  await expect(page.locator('.metrics').getByText('0.3',{exact:true})).toHaveCount(12);
+  await page.getByText('Completion-time uncertainty',{exact:true}).click();
+  const uncertainty=page.locator('.completion-results details');
+  await expect(uncertainty.getByText(/sample is too small/)).toBeVisible();
+  await expect(uncertainty.getByText('Unavailable',{exact:true})).toHaveCount(18);
+  await expect(uncertainty.getByText('Sample SD (ddof=1)',{exact:true})).toBeVisible();
 });
 
 

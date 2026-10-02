@@ -7,3 +7,42 @@
 .field textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px; border: 1px solid #c5d3cd; border-radius: 5px; background: #fff; color: #183d34; }
 .incomplete-badge { color: #925818; }
 .missing-inputs { padding: 12px; background: #fff7e9; border-radius: 8px; margin-bottom: 12px; }
+
+/* Panel preferences are independent of the network's canvas positions. */
+.workspace{grid-template-columns:var(--sidebar-width,245px) 8px minmax(360px,1fr) 8px var(--properties-width,350px);height:var(--modeling-height,560px);min-height:440px;border-bottom:0}
+.canvas-panel,.canvas-area,.sidebar,.properties{min-height:0}
+.canvas-empty{max-width:100%;padding:18px}
+.analysis-panel{height:var(--analysis-height,260px);min-height:180px;display:flex;flex-direction:column;overflow:hidden}
+.analysis-heading{flex-shrink:0}
+.analysis-content{flex:1;min-height:0;max-height:none;overflow:auto}
+.resize-handle{background:#e2e9e1;position:relative;touch-action:none;user-select:none;z-index:2}
+.resize-handle.vertical{width:8px;cursor:col-resize}
+.resize-handle.horizontal{height:8px;cursor:row-resize}
+.resize-handle::after{content:"";position:absolute;background:#a4b7a9;border-radius:3px}
+.resize-handle.vertical::after{width:2px;height:36px;top:calc(50% - 18px);left:3px}
+.resize-handle.horizontal::after{height:2px;width:36px;left:calc(50% - 18px);top:3px}
+.resize-handle:hover,.resize-handle:focus-visible{background:#d4b783;outline:2px solid #936124;outline-offset:-2px}
+.result-uncertainty{margin-top:8px;padding-top:6px}
+.result-uncertainty summary{font-size:11px;line-height:1.5}
+.result-uncertainty summary:focus-visible{outline:2px solid #bc7b34;outline-offset:2px}
+.uncertainty-metrics{margin:8px 0;display:grid;gap:8px}
+.uncertainty-metrics dt{color:#637768;font-size:10px}
+.uncertainty-metrics dd{margin:2px 0 0;overflow-wrap:anywhere}
+.uncertainty-help{font-size:11px;color:#637768;line-height:1.6;margin:8px 0}
+.ci-range{overflow-wrap:anywhere}
+@media(max-width:900px){
+  .workspace{height:auto;min-height:0;min-width:0;grid-template-columns:190px minmax(0,1fr)}
+  .resize-handle{display:none}
+  .analysis-panel{height:auto;min-width:0;max-height:none;overflow:visible}
+  .analysis-content{max-height:650px;flex:auto}
+  .analysis-heading{padding:0 8px}
+}
+@media(max-width:540px){
+  .workspace{display:flex;flex-direction:column}
+  .workspace>.editor-shell{max-height:450px}
+  .sidebar{max-height:450px}
+  .canvas-panel{height:560px;flex-shrink:0}
+  .canvas-empty{width:100%}
+  .analysis-heading [role=tab]{padding:12px 8px}
+  .app>footer{gap:12px;flex-wrap:wrap}
+}

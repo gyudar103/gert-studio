@@ -18,7 +18,7 @@ export function simulationBody(model:Model,form:SettingsForm) {
 async function post<T>(path:string,body:string):Promise<T> {
   let response:Response;
   try {response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body});}
-  catch {throw new ApiError('Cannot reach the backend. Check that Docker services are running, then retry.');}
+  catch {throw new ApiError('Cannot reach the backend. Check that GERT Studio is running, then retry.');}
   let data;
   try {data=exactJSON.parse(await response.text());}
   catch {throw new ApiError(`The backend returned an unreadable response (HTTP ${response.status}). Please retry or check service logs.`);}

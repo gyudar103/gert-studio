@@ -5,17 +5,21 @@ import {ApiError,runSimulation,validateModel} from './api';
 import {demoSettings,demoWorkspace} from './demo';
 import {downloadModel,importModel} from './files';
 import {useWorkspaceHistory} from './useWorkspaceHistory';
+import {useResizableLayout} from './useResizableLayout';
+import ResizeHandle from './components/ResizeHandle';
 import Canvas from './components/Canvas';
 import Properties from './components/Properties';
 import {Field} from './components/Fields';
 import {Diagnostics,Results} from './components/Analysis';
 
 export default function App() {
+  const panels=useResizableLayout();
   const {workspace,setWorkspace,begin,end,undo:restore,reset,canUndo}=useWorkspaceHistory(emptyWorkspace);
   const [settings,setSettings]=useState<SettingsForm>(emptySettings);
   const [selection,setSelection]=useState<Selection>(null);
   const [report,setReport]=useState<ValidationReport>();
   const [result,setResult]=useState<SimulationResult>();
+  const [importedResult,setImportedResult]=useState(false);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState<'validate'|'simulate'|'import'|null>(null);
   const [importDiagnostics,setImportDiagnostics]=useState(false);
@@ -83,7 +87,7 @@ export default function App() {
     lock.current=true;setBusy(kind);setError('');setResult(undefined);setReport(undefined);setImportDiagnostics(false);
     try {
       if(kind==='validate') {setReport(await validateModel(apiModel(workspace)));setTab('validation');}
-      else {const response=await runSimulation(apiModel(workspace),settings);setReport(response.validation);setResult(response);setTab('results');}
+      else {const response=await runSimulation(apiModel(workspace),settings);setReport(response.validation);setResult(response);setImportedResult(false);setTab('results');}
     } catch(e) {setError(e instanceof Error?e.message:'Request failed. Please retry.');if(e instanceof ApiError && e.diagnostics) setReport(e.diagnostics);setTab('validation');}
     finally {lock.current=false;setBusy(null);}
   }
@@ -93,8 +97,9 @@ export default function App() {
     try {
       const imported=await importModel(await file.text());
       if((model.nodes.length||model.activities.length||model.item_types.length) && !window.confirm('Replace the current network with this validated file? Export first to keep your edits.')) return;
-      reset(imported.workspace);setSelection(null);setResult(undefined);
-      setReport(imported.report);setImportDiagnostics(false);setTab('validation');setCanvasVersion(v=>v+1);
+      reset(imported.workspace);setSelection(null);setResult(imported.result);setImportedResult(!!imported.result);
+      if(imported.settings) setSettings(imported.settings);
+      setReport(imported.report);setImportDiagnostics(false);setTab(imported.result?'results':'validation');setCanvasVersion(v=>v+1);
     } catch(e) {
       setError(e instanceof Error?e.message:'Could not read the file. Your current model is unchanged.');
       if(e instanceof ApiError && e.diagnostics) {setReport(e.diagnostics);setImportDiagnostics(true);setTab('validation');}
@@ -102,17 +107,18 @@ export default function App() {
   }
   function selectDiagnostic(d:Diagnostic) {const selected=diagnosticSelection(model,d.path,d.element_id);if(selected){setSelection(selected);setFocus(f=>f+1);}}
   return <div className="app">
-    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><button disabled={!!busy||!canUndo} onClick={undo} title="Undo (Ctrl+Z / Cmd+Z)">Undo</button><span className="version">v0.1 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy||missing.length>0} title={missing.length?'Complete the missing inputs listed below before simulation':undefined} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><h1>GERT Studio</h1><span>Model uncertainty. Understand outcomes.</span></div></div><div className="top-actions"><button onClick={panels.reset} title="Restore default panel sizes">Reset layout</button><button disabled={!!busy||!canUndo} onClick={undo} title="Undo (Ctrl+Z / Cmd+Z)">Undo</button><span className="version">v0.2.0 · Modeling workspace</span><button disabled={!!busy} onClick={()=>void submit('validate')}>{busy==='validate'?'Validating…':'Validate'}</button><button className="primary" disabled={!!busy||missing.length>0} title={missing.length?'Complete the missing inputs listed below before simulation':undefined} onClick={()=>void submit('simulate')}>{busy==='simulate'?'Running simulation…':'Run Simulation'}</button></div></header>
     {error && <div role="alert" className="error-banner">{error}<button aria-label="Dismiss message" onClick={()=>setError('')}>×</button></div>}
+    <div className="studio-panels" ref={panels.ref} style={panels.style}>
     <main className="workspace">
-      <fieldset className="editor-shell" disabled={!!busy}><aside className="sidebar" aria-label="Model and items">
+      <fieldset id="model-panel" className="editor-shell" disabled={!!busy}><aside className="sidebar" aria-label="Model and items">
         <div className="panel-heading">Model <span>01</span></div><div className="sidebar-content">
           <Field label="Project name" value={model.project.name} onChange={name=>changeModel(m=>({...m,project:{...m.project,name}}))}/>
           <details><summary>Project identity</summary><Field label="Project ID" required value={model.project.id} onChange={id=>changeModel(m=>({...m,project:{...m.project,id}}))}/></details>
           <div className="project-actions"><button onClick={()=>replace(false)}>New blank</button><button onClick={()=>replace(true)}>Load demo</button></div>
-          <div className="project-actions"><button onClick={()=>fileInput.current?.click()}>Import JSON</button><button onClick={()=>downloadModel(workspace)}>Export JSON</button></div>
+          <div className="project-actions"><button onClick={()=>fileInput.current?.click()}>Import JSON</button><button onClick={()=>downloadModel(workspace,result)}>Export JSON</button></div>
           <input ref={fileInput} type="file" accept=".json,application/json" aria-label="Import model JSON" hidden onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file) void loadFile(file);}}/>
-          <p className="hint">JSON saves the mathematical model. Layout is regenerated on import; run settings stay separate. Import requires backend validation. Export can also save unfinished edits.</p>
+          <p className="hint">JSON saves the model and, when present, simulation settings and results. Layout is regenerated on import. Import requires backend validation. Export can also save unfinished edits.</p>
           <p className="hint">Demo: parallel build, integration, stochastic test and rework. Loading it supplies visible example values.</p>
           <div className="section-heading"><h2>Items</h2><button className="subtle" onClick={()=>{const index=model.item_types.length;changeModel(m=>({...m,item_types:[...m.item_types,{id:freshId('item',m.item_types),label:'New item'}]}));setSelection({kind:'item',index});}}>+ Item</button></div>
           {!model.item_types.length && <p className="hint">Add the things your activities consume and produce.</p>}
@@ -125,16 +131,19 @@ export default function App() {
             {([['realizations','Realizations'],['seed','Seed (optional)'],['max_simulation_time','Max simulation time'],['max_activity_instances','Max activity instances'],['max_activity_completions','Max activity completions']] as const).map(([key,label])=><Field key={key} label={label} required={key!=='seed'} value={settings[key]} onChange={value=>{setSettings(s=>({...s,[key]:value}));setResult(undefined);setError('');}} help={key==='seed'?'Leave empty to generate a seed. The actual seed is returned with results.':undefined}/>)}
           </details>
         </div></aside></fieldset>
+      {panels.desktop && <ResizeHandle label="Resize model sidebar" orientation="vertical" controls="model-panel" value={panels.sizes.sidebar} {...panels.limits.sidebar} onResize={value=>panels.resize('sidebar',value)}/>}
       <section className="canvas-panel" aria-label="Network canvas"><div className="canvas-toolbar"><div><strong>{model.project.name||'Untitled network'}</strong><small>Connect node handles to create activities</small></div><div className="creation-actions"><button disabled={!!busy} onClick={()=>addNode('start')}>+ Start</button><button disabled={!!busy} onClick={()=>addNode('state')}>+ State</button><button disabled={!!busy} onClick={()=>addNode('terminal')}>+ Terminal</button><button disabled={!!busy} onClick={()=>addActivity(selection?.kind==='node'?model.nodes[selection.index].id:'')}>+ Activity</button></div></div>
         <div className="canvas-area"><Canvas key={canvasVersion} workspace={workspace} selection={selection} focus={focus} select={setSelection} connect={addActivity} beginMove={begin} endMove={end} move={(kind,index,point)=>setWorkspace(w=>({...w,layout:{...w.layout,[kind]:w.layout[kind].map((p,i)=>i===index?point:p)}}))}/>
           {!model.nodes.length && <div className="canvas-empty"><span>YOUR NEXT PROJECT</span><h2>A network of possibilities.</h2><p>Add a Start node and define its items.<br/>Connect activities, then explore what happens.</p><button onClick={()=>replace(true)}>Explore the prototype demo →</button></div>}
           {busy && <div className="busy-overlay" role="status">{busy==='simulate'?'Simulating… results will appear when all realizations finish.':'Validating with the backend…'}</div>}
         </div><div className="canvas-legend"><span>● Start</span><span>■ State</span><span>◎ Terminal</span><span>▰ Activity → outcome branches</span><span>Drag to arrange · Scroll to zoom</span></div>
       </section>
-      <fieldset className="editor-shell" disabled={!!busy}><Properties model={model} selection={selection} select={setSelection} updateNode={updateNode} updateActivity={updateActivity} updateItem={updateItem} remove={remove}/></fieldset>
+      {panels.desktop && <ResizeHandle label="Resize properties panel" orientation="vertical" reverse controls="properties-panel" value={panels.sizes.properties} {...panels.limits.properties} onResize={value=>panels.resize('properties',value)}/>}
+      <fieldset id="properties-panel" className="editor-shell" disabled={!!busy}><Properties model={model} selection={selection} select={setSelection} updateNode={updateNode} updateActivity={updateActivity} updateItem={updateItem} remove={remove}/></fieldset>
     </main>
-    <section className="analysis-panel" aria-label="Analysis"><div className="analysis-heading"><div role="tablist" aria-label="Analysis views"><button role="tab" aria-selected={tab==='validation'} onClick={()=>setTab('validation')}>Validation {report?`· ${report.diagnostics.length}`:''}</button><button role="tab" aria-selected={tab==='results'} onClick={()=>setTab('results')}>Simulation results</button></div><small>Backend semantics · Exact decimal inputs</small></div>
-      <div className="analysis-content">{missing.length>0 && <div className="missing-inputs"><strong>Simulation unavailable: {missing.length} missing input{missing.length===1?'':'s'}. Drafts can be exported and imported.</strong>{missing.map((d,i)=><button key={i} className="diagnostic info" onClick={()=>selectDiagnostic(d)}>{d.message}</button>)}</div>}{tab==='validation'?(report?<>{importDiagnostics && <p className="analysis-empty">These diagnostics refer to the rejected import file. Your current network is unchanged.</p>}<Diagnostics report={report} onSelect={importDiagnostics?()=>{}:selectDiagnostic}/></>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
-    </section><footer>GERT Studio <span>Local workspace · Export JSON to keep your model before refreshing</span></footer>
+    {panels.desktop && <ResizeHandle label="Resize analysis panel" orientation="horizontal" reverse controls="analysis-panel" value={panels.sizes.analysis} {...panels.limits.analysis} onResize={value=>panels.resize('analysis',value)}/>}
+    <section id="analysis-panel" className="analysis-panel" aria-label="Analysis"><div className="analysis-heading"><div role="tablist" aria-label="Analysis views"><button role="tab" aria-selected={tab==='validation'} onClick={()=>setTab('validation')}>Validation {report?`· ${report.diagnostics.length}`:''}</button><button role="tab" aria-selected={tab==='results'} onClick={()=>setTab('results')}>Simulation results</button></div><small>Backend semantics · Exact decimal inputs</small></div>
+      <div className="analysis-content">{missing.length>0 && <div className="missing-inputs"><strong>Simulation unavailable: {missing.length} missing input{missing.length===1?'':'s'}. Drafts can be exported and imported.</strong>{missing.map((d,i)=><button key={i} className="diagnostic info" onClick={()=>selectDiagnostic(d)}>{d.message}</button>)}</div>}{tab==='validation'?(report?<>{importDiagnostics && <p className="analysis-empty">These diagnostics refer to the rejected import file. Your current network is unchanged.</p>}<Diagnostics report={report} onSelect={importDiagnostics?()=>{}:selectDiagnostic}/></>:<div className="analysis-empty"><strong>Ready when your model is.</strong><p>Validate to check connections, quantities and probabilities. Warnings will remain visible.</p></div>):result?<Results result={result} model={model} imported={importedResult}/>:<div className="analysis-empty"><strong>No simulation results yet.</strong><p>Enter simulation settings and choose Run Simulation. Model or settings edits clear previous results.</p></div>}</div>
+    </section></div><footer>GERT Studio <span>Local workspace · Export JSON to keep your model before refreshing</span></footer>
   </div>;
 }

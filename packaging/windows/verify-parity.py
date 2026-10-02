@@ -104,12 +104,18 @@ def main():
                 for route in ("/api/health", "/openapi.json"):
                     values = {name: json.loads(get(url + route)) for name, url in endpoints.items()}
                     assert all(value == values["native"] for value in values.values()), route
-                assert get(endpoints["packaged"] + "/") == get(endpoints["native"] + "/")
+                index = (ROOT / "frontend/dist/index.html").read_text(encoding="utf-8")
+                marker = '<meta name="gert-panel-preferences" content="native-v1">'
+                hosted_index = (index.replace("<head>", "<head>" + marker, 1)
+                                if "<head>" in index else marker + index).encode("utf-8")
+                assert get(endpoints["packaged"] + "/") == hosted_index
+                assert get(endpoints["native"] + "/") == hosted_index
                 for asset in (ROOT / "frontend/dist").rglob("*"):
                     if asset.is_file():
                         route = "/" + asset.relative_to(ROOT / "frontend/dist").as_posix()
-                        assert get(endpoints["packaged"] + route) == asset.read_bytes()
-                        assert get(endpoints["native"] + route) == asset.read_bytes()
+                        expected = hosted_index if route == "/index.html" else asset.read_bytes()
+                        assert get(endpoints["packaged"] + route) == expected
+                        assert get(endpoints["native"] + route) == expected
                 report["health_openapi_frontend_assets"] = "exact"
                 for name, payload in scenarios(fixture):
                     results = {label: post(url + "/api/simulate", payload) for label, url in endpoints.items()}

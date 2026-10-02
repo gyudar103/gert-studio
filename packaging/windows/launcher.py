@@ -71,15 +71,21 @@ def existing_instance(path: Path, timeout=30):
     raise RuntimeError("Another GERT Studio instance is starting or is unresponsive. Try again shortly.")
 
 
-def make_app(frontend: Path, token: str, stop):
+def make_app(frontend: Path, token: str, stop, *, preferences_path: Path | None = None, origin: str | None = None):
     from app.main import app
-    from starlette.responses import JSONResponse
+    from starlette.responses import HTMLResponse, JSONResponse
     from starlette.routing import Mount, Route
     from starlette.staticfiles import StaticFiles
     from starlette.applications import Starlette
 
     if not (frontend / "index.html").is_file():
         raise RuntimeError("The frontend files are missing. Extract the entire ZIP before launching.")
+
+    async def index(request):
+        html = (frontend / "index.html").read_text(encoding="utf-8")
+        marker = '<meta name="gert-panel-preferences" content="native-v1">'
+        html = html.replace("<head>", "<head>" + marker, 1) if "<head>" in html else marker + html
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     async def control(request):
         supplied = request.headers.get("X-GERT-Launcher", "")
@@ -90,11 +96,78 @@ def make_app(frontend: Path, token: str, stop):
             return JSONResponse({"stopping": True})
         return JSONResponse({"application": "GERT Studio", "ready": True})
 
+    def valid_layout(value):
+        import math
+        return (isinstance(value, dict) and set(value) == {"version", "sidebar", "properties", "analysis"}
+                and type(value["version"]) is int and value["version"] == 1
+                and all(type(value[key]) in (int, float) and math.isfinite(value[key])
+                        and 0 < value[key] <= 100000 for key in ("sidebar", "properties", "analysis")))
+
+    async def preferences(request):
+        # This UI-only bridge follows the Windows user data directory across
+        # ephemeral loopback ports. It neither exposes nor uses the stop token.
+        from urllib.parse import urlsplit
+        headers = {"Cache-Control": "no-store"}
+        if (request.headers.get("host") != urlsplit(origin).netloc
+                or request.headers.get("sec-fetch-site", "same-origin") not in ("same-origin", "none")
+                or request.headers.get("origin", origin) != origin):
+            return JSONResponse({"error": "Forbidden"}, status_code=403, headers=headers)
+        if request.method == "GET":
+            try:
+                # Ignore damaged/obsolete preferences without reading unbounded files.
+                if preferences_path.stat().st_size > 1024:
+                    raise ValueError("Preferences too large")
+                with preferences_path.open("rb") as saved:
+                    value = json.loads(saved.read(1025))
+                if not valid_layout(value):
+                    value = None
+            except (OSError, ValueError, OverflowError):
+                value = None
+            return JSONResponse({"layout": value}, headers=headers)
+        if (request.headers.get("origin") != origin
+                or request.headers.get("content-type", "").split(";")[0].strip() != "application/json"):
+            return JSONResponse({"error": "Same-origin JSON required"}, status_code=403, headers=headers)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 1024:
+                return JSONResponse({"error": "Preferences too large"}, status_code=413, headers=headers)
+        try:
+            value = json.loads(body)
+            if not valid_layout(value):
+                raise ValueError("Invalid layout")
+        except (ValueError, OverflowError):
+            return JSONResponse({"error": "Invalid versioned panel sizes"}, status_code=422, headers=headers)
+        import tempfile
+        temporary = None
+        try:
+            preferences_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=preferences_path.parent,
+                                             prefix="panel-layout-", suffix=".tmp", delete=False) as saved:
+                temporary = Path(saved.name)
+                json.dump(value, saved, separators=(",", ":"))
+                saved.flush()
+                os.fsync(saved.fileno())
+            temporary.replace(preferences_path)
+        except OSError:
+            logging.exception("Could not save panel preferences")
+            return JSONResponse({"error": "Preferences could not be saved"}, status_code=503, headers=headers)
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    logging.warning("Could not remove temporary panel preferences")
+        return JSONResponse({"layout": value}, headers=headers)
+
     # Route ASGI requests without stripping /api. The imported API is not mutated.
     # All other original API routes (/docs, /redoc, /openapi.json) remain available.
     return Starlette(routes=[
         Route("/_launcher/status", control, methods=["GET"]),
         Route("/_launcher/stop", control, methods=["POST"]),
+        *([Route("/", index), Route("/index.html", index),
+           Route("/api/ui-preferences/panel-layout", preferences, methods=["GET", "PUT"])]
+          if preferences_path is not None and origin is not None else []),
         Route("/api/{path:path}", app, methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]),
         Route("/docs", app), Route("/docs/oauth2-redirect", app),
         Route("/redoc", app), Route("/openapi.json", app),
@@ -103,7 +176,7 @@ def make_app(frontend: Path, token: str, stop):
 
 
 class LocalServer:
-    def __init__(self, frontend: Path):
+    def __init__(self, frontend: Path, state_directory: Path | None = None):
         import uvicorn
         self.token = secrets.token_urlsafe(32)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -113,7 +186,8 @@ class LocalServer:
         self.url = f"http://127.0.0.1:{self.port}"
         self.error = None
         try:
-            app = make_app(frontend, self.token, self.stop)
+            app = make_app(frontend, self.token, self.stop,
+                           preferences_path=(state_directory or data_directory()) / "panel-layout.json", origin=self.url)
             self.server = uvicorn.Server(uvicorn.Config(
                 app, host="127.0.0.1", port=self.port, loop="asyncio", http="h11",
                 ws="none", lifespan="off", log_config=None, access_log=False))
@@ -217,7 +291,7 @@ def main(argv=None):
         # Remove crash leftovers only after owning the OS lock.
         state_path.unlink(missing_ok=True)
         frontend = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / "frontend" / "dist"
-        server = LocalServer(frontend)
+        server = LocalServer(frontend, args.state_dir)
         server.start()
         state = {"port": server.port, "token": server.token, "pid": os.getpid()}
         temporary = state_path.with_suffix(".tmp")

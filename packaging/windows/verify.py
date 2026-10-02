@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 import tempfile
 import time
@@ -84,6 +85,12 @@ def main():
             assert result["summary"]["statuses"]["terminal"]["count"] > 0
             report["checks"].append("Parallel/rework project validates and repeats exactly with a fixed seed")
             report["result_sha256"] = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
+            panel_layout = {"version": 1, "sidebar": 280, "properties": 420, "analysis": 300}
+            preferences = urllib.request.Request(url + "/api/ui-preferences/panel-layout",
+                data=json.dumps(panel_layout).encode(), method="PUT",
+                headers={"Content-Type": "application/json", "Origin": url})
+            with OPENER.open(preferences, timeout=10) as response:
+                assert json.load(response) == {"layout": panel_layout}
             if args.compare_url:
                 other = post(args.compare_url.rstrip("/") + "/api/simulate", fixture)
                 if result != other:
@@ -101,6 +108,18 @@ def main():
             else:
                 raise AssertionError("Server still listening after exit")
             report["checks"].append("Graceful stop exits the process, removes stale state and closes the port")
+            # Occupy the previous port: persisted UI preferences must follow the
+            # Windows state directory rather than a browser origin's port.
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+                occupied.bind(("127.0.0.1", state["port"]))
+                process = subprocess.Popen([str(exe), *flags], cwd=directory, env=env)
+                next_state, next_url = wait_ready(state_dir, process)
+                assert next_state["port"] != state["port"]
+                assert json.loads(get(next_url + "/api/ui-preferences/panel-layout")) == {"layout": panel_layout}
+                subprocess.run([str(exe), "--headless", "--stop", "--state-dir", str(state_dir)],
+                               check=True, env=env, cwd=directory, timeout=15)
+                assert process.wait(timeout=30) == 0
+            report["checks"].append("Panel preferences survive packaged restart with previous port unavailable")
             # Exercise stale state recovery after ungraceful termination.
             process = subprocess.Popen([str(exe), *flags], cwd=directory, env=env)
             wait_ready(state_dir, process)
