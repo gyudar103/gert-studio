@@ -160,7 +160,9 @@ test('constructs a deterministic network through forms and canvas connections',a
   const uncertainty=page.locator('.completion-results details');
   await expect(uncertainty.getByText(/sample is too small/)).toBeVisible();
   for(const [percentile,interval] of Object.entries(quantileIntervals) as [string,{lower:string|null;upper:string|null}][]) {
-    const row=uncertainty.locator('dl').last().locator(':scope > div').filter({has:page.getByText(percentile.toUpperCase(),{exact:true})});
+    const label=percentile==='p50'?'Median / P50':percentile.toUpperCase();
+    const row=uncertainty.locator('dl').last().locator(':scope > div').filter({has:page.getByText(label,{exact:true})});
+    await expect(row).toHaveCount(1);
     await expect(row.getByText('Unavailable',{exact:true})).toHaveCount(Number(interval.lower===null)+Number(interval.upper===null));
   }
   await expect(uncertainty.getByText('Sample SD (ddof=1)',{exact:true})).toBeVisible();
