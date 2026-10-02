@@ -151,13 +151,18 @@ test('constructs a deterministic network through forms and canvas connections',a
   await page.getByLabel(/^Realizations/).fill('3');await page.getByLabel(/^Seed/).fill('42');
   await page.getByLabel(/^Max simulation time/).fill('10');await page.getByLabel(/^Max activity instances/).fill('10');await page.getByLabel(/^Max activity completions/).fill('10');
   await page.getByRole('button',{name:'Validate',exact:true}).click();await expect(page.getByText('Model valid',{exact:true})).toBeVisible();
+  const simulationResponse=page.waitForResponse(r=>r.url().endsWith('/api/simulate'));
   await page.getByRole('button',{name:'Run Simulation',exact:true}).click();
+  const quantileIntervals=(await(await simulationResponse).json()).summary.terminal_duration.quantile_confidence_intervals;
   await expect(page.getByText('3 realizations',{exact:true})).toBeVisible();
   await expect(page.locator('.metrics').getByText('0.3',{exact:true})).toHaveCount(12);
   await page.getByText('Completion-time uncertainty',{exact:true}).click();
   const uncertainty=page.locator('.completion-results details');
   await expect(uncertainty.getByText(/sample is too small/)).toBeVisible();
-  await expect(uncertainty.getByText('Unavailable',{exact:true})).toHaveCount(18);
+  for(const [percentile,interval] of Object.entries(quantileIntervals) as [string,{lower:string|null;upper:string|null}][]) {
+    const row=uncertainty.locator('dl').last().locator(':scope > div').filter({has:page.getByText(percentile.toUpperCase(),{exact:true})});
+    await expect(row.getByText('Unavailable',{exact:true})).toHaveCount(Number(interval.lower===null)+Number(interval.upper===null));
+  }
   await expect(uncertainty.getByText('Sample SD (ddof=1)',{exact:true})).toBeVisible();
 });
 
