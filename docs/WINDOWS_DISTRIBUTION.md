@@ -1,6 +1,7 @@
 # Portable Windows distribution
 
-The Windows portable folder and Docker run the same GERT Studio application.
+The Windows portable folder is the primary distribution. Optional Docker runs the
+same GERT Studio application and is not required for normal release acceptance.
 The Windows launcher bundles Python, the backend and production frontend; ordinary
 users need no Python, Node, npm, Git, Docker, build tools or administrator access.
 There is no cloud dependency. See [verification status](WINDOWS_VERIFICATION.md)
@@ -87,10 +88,17 @@ duplicate servers, including concurrent launches. Local authenticated launcher
 endpoints support readiness and graceful stop. Readiness state is written atomically
 in `%LOCALAPPDATA%\GERT Studio`; a new lock owner removes stale crash state.
 
+Panel sizes alone persist in `panel-layout.json` in that per-user directory through
+the portable host's `/api/ui-preferences/panel-layout` bridge, so a new loopback
+port on restart does not lose the preference. The bridge accepts only bounded,
+versioned numeric panel sizes, validates same-origin writes, and replaces the file
+atomically. Browser-only deployments use localStorage. Model data, canvas positions,
+simulation settings/results, and Undo history are not persisted by this bridge.
+
 Exit waits for active requests to finish; a long simulation can delay shutdown.
 No browser-tab or idle timeout discards active work. Unsaved editor state is not
-persisted by the launcher. The current frontend intentionally retains its existing
-Docker-oriented network-error message; in the portable edition relaunch the EXE.
+persisted by the launcher. If the frontend cannot reach the backend, check that
+GERT Studio is running; relaunch the EXE if necessary.
 
 The engine/reproducibility version is read from current source at build time and
 checked against the actual packaged HTTP response. The 2026-10-01 baseline uses
@@ -126,7 +134,8 @@ and missing-input rejection:
 .venv-windows\Scripts\python.exe packaging/windows/verify-parity.py
 ```
 
-Add Docker/Linux as a third participant:
+Optionally add Docker/Linux as a third participant; this is non-blocking unless
+Docker behavior changes:
 
 ```powershell
 docker compose up --build -d
@@ -153,6 +162,18 @@ isolated application. The suite includes documented drafts, placeholders and und
 as well as model creation, import/export, probability adjustment and result toggles.
 
 Docker remains separately supported with the unchanged README workflow and tests.
+
+## Release identity and publication
+
+The next feature release uses tag `v0.2.0`, following the existing `v0.1.0` convention,
+and is published as a Windows preview (GitHub pre-release). Product/file version
+0.2.0 is separate from engine 0.1.1 and the unchanged reproducibility version.
+Build from an immutable clean candidate, verify the actual package and exact
+source/package results, and independently review that candidate plus ZIP SHA-256.
+Publish that same reviewed ZIP and its checksum as GitHub Release assets; do not
+commit generated binaries. Any changed build input requires a new candidate/build
+and renewed review before publication. A fresh-machine result applies only to the
+artifact actually tested, not automatically to later builds.
 
 ## Clean-machine release gate
 

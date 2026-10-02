@@ -1,9 +1,10 @@
 # GERT Studio frontend architecture
 
 Frontend Milestone 1 is a React 19 and TypeScript workspace built with Vite and
-`@xyflow/react`. It runs as the `frontend` service in Docker Compose on port 5173;
-the existing FastAPI backend remains on port 8000. Vite proxies `/api` requests to
-the backend service during local development.
+`@xyflow/react`. Native Node/npm and Python 3.12 are the primary development tools;
+the portable Windows application serves the production frontend and FastAPI backend
+on the same local origin. Optional Docker Compose runs `frontend` on port 5173 and
+the backend on port 8000. Vite proxies `/api` requests during local development.
 
 ## State model
 
@@ -17,6 +18,9 @@ Resizable desktop panel dimensions are separate UI preferences, persisted locall
 with versioning and safe clamping. They do not enter `Workspace`, model undo history,
 exports, or simulation requests. Accessible separators and Reset layout control these
 preferences; narrow layouts retain their responsive behavior.
+The portable Windows host also stores these preferences in its per-user data
+directory, independently of the changing loopback port; browser-only deployments
+use localStorage. Neither mechanism stores model data.
 
 The graph is a projection of the model. Node cards represent Start, State, and
 Terminal nodes. Each activity is one card with one source edge and one edge for every

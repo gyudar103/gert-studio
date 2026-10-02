@@ -4,7 +4,15 @@ A browser editor and Python simulator for stochastic project networks: parallel
 activities, named consumable items, synchronization, probabilistic outcomes and
 rework cycles.
 
-## Run locally
+## Run on Windows
+
+Download the portable Windows ZIP from the repository's GitHub Releases, extract
+the entire folder, and run **GERT Studio.exe**. End users need no Python, Node.js,
+npm, Git, Docker, WSL, or developer tools. Keep the control window open while using
+the app; use **Exit GERT Studio** to stop it.
+See [Windows distribution and build instructions](docs/WINDOWS_DISTRIBUTION.md).
+
+## Optional Docker startup
 
 Install Docker with a running Linux engine. From this repository:
 
@@ -39,9 +47,11 @@ are edited in the properties panel and persist in JSON; certainty is descriptive
 
 ## Verify
 
-The same application also has a [portable Windows build](docs/WINDOWS_DISTRIBUTION.md).
-See its [current verification report](docs/WINDOWS_VERIFICATION.md) for release gates.
-Docker remains separately supported; Windows users do not need Docker.
+Native Python 3.12 and Node/npm are the primary developer tools. Follow the
+[native tests and packaged verification workflow](docs/WINDOWS_DISTRIBUTION.md#verify).
+Release acceptance requires verification of the exact Windows candidate/artifact;
+see the [verification report](docs/WINDOWS_VERIFICATION.md) for recorded evidence.
+Docker checks below are optional unless Docker behavior changes.
 
 With both services running:
 

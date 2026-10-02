@@ -152,9 +152,10 @@ Report statistical uncertainty at 95% confidence, separately from descriptive SD
   bounded by [0,1], including at zero/all successes. Use a documented fixed
   two-sided normal critical constant; do not substitute a Wald interval.
 - Mean duration and mean starts use their respective samples above. For `n>=2`,
-  Monte Carlo SE is `sqrt(sample_variance/n)` with `ddof=1`; the 95% Student-t CI
+  report inferential sample SD (`ddof=1`) separately from descriptive population
+  SD. Monte Carlo SE is `sqrt(sample_variance/n)`; the 95% Student-t CI
   is `mean ± t_(0.975,n-1) * SE`. For `n=0` the mean/SE/CI are unavailable;
-  for `n=1` the mean exists but SE/CI are unavailable. Clip negative lower endpoints
+  for `n=1` the mean exists but inferential sample SD/SE/CI are unavailable. Clip negative lower endpoints
   to zero for these nonnegative quantities and explicitly identify support clipping.
 - Each completion-time percentile has a separate 95% nonparametric binomial/order-
   statistic CI using equal-tailed binomial rank bounds and observed sorted values.
@@ -247,11 +248,21 @@ Export and reload must preserve model semantics. Support deterministic serializa
 
 ## 22. Deployment
 
-Standalone, self-hosted, Docker-based application. It must not depend on a coding assistant at runtime. Development uses Docker Compose. One-command deployment and final port packaging are deployment goals.
+The primary distribution is a portable Windows application: download the release
+ZIP, extract it, and run GERT Studio. It bundles its runtime, backend, production
+frontend, and required dependencies; end users need no Python, Node.js, npm, Git,
+Docker, WSL, developer tooling, or coding assistant. Docker remains a secondary,
+optional self-hosted path.
 
 ## 23. Technology and Delivery Sequence
 
-Current environment: Windows host, Docker Desktop with Linux containers, Python 3.12 inside Docker, FastAPI, Pydantic, NumPy, SciPy, NetworkX, and pytest. Run Python and tests inside Docker; do not require host Python. This document does not pin dependency versions.
+The primary developer/release workflow uses native Python 3.12, Node/npm, frontend
+and browser test tooling, then a committed release candidate and portable Windows
+build. Backend dependencies include FastAPI, Pydantic, NumPy, SciPy, NetworkX, and
+pytest. Verify the packaged app against native source behavior and independently
+review the exact candidate/artifact pair before publication. Docker verification
+is optional and non-blocking unless Docker behavior changes. This document does
+not pin dependency versions.
 
 Later frontend: React, TypeScript, React Flow, and Plotly or equivalent. JSON export/import is required for a usable Version 0.1; SQLite is a possible later storage choice, not a Phase 1 requirement.
 

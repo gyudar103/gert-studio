@@ -204,6 +204,45 @@ for duration/starts, and nonparametric binomial/order-statistic percentile inter
 Duration samples contain terminal runs only; activity samples include every requested
 realization and zero starts. These additions do not change simulation or RNG behavior.
 
+Uncertainty calculations in `app/reporting/uncertainty.py` use exact Fraction
+moments and integer binomial tails before irrational operations. Fresh Decimal
+contexts use 80 significant digits and ROUND_HALF_EVEN; new numeric outputs use
+34 significant digits as decimal strings. SD is `sqrt(sum((x-mean)^2)/n)`;
+inferential sample SD is `sqrt(sum((x-mean)^2)/(n-1))`, exposed separately as
+`sample_standard_deviation` for duration and `sample_standard_deviation_starts`
+for activity counts; mean SE is `sqrt(sum((x-mean)^2)/(n*(n-1)))`.
+With no observations these are null; with one observation population SD is zero
+and inferential sample SD/mean SE/CI are null. Student-t lower endpoints
+are clipped to zero, with `lower_clipped` explicitly identifying this support bound.
+
+Probability SE is `sqrt(k*(N-k)/N^3)`. Wilson uses the fixed decimal constant
+`z=1.9599639845400542355245944305205515279555500778695` (50 significant digits),
+with `p=k/N`, center `(p+z^2/(2*N))/(1+z^2/N)` and radius
+`z*sqrt(p*(1-p)/N+z^2/(4*N^2))/(1+z^2/N)`. Boundary endpoints are exactly zero
+for `k=0` and one for `k=N`; all endpoints remain in [0,1]. Counts, rather than
+serialized probabilities, are authoritative inputs.
+
+For every positive integer `df=n-1`, Student-t evaluation solves
+`I_(t^2/(df+t^2))(1/2,df/2)=0.95` with 240 bisections on [0,16]. The incomplete
+beta function uses a continued fraction, terminating when its multiplier or result
+rounds unchanged in the controlled context (with an explicit convergence guard).
+Log-gamma evaluation shifts arguments to at least 128 by recurrence and uses
+48 exact Bernoulli/Stirling terms. Working precision is `80+digits(df)` to protect
+log-gamma subtraction; critical values round to 60 significant digits before the
+mean interval `mean ± t*SE`, whose endpoints serialize at 34 digits. There is no
+large-df normal approximation or critical-value table, and no RNG or native libm.
+
+For a quantile probability `p` and terminal sample size `n`, let `B~Bin(n,p)`.
+Choose the greatest lower rank `L` satisfying `P(B<L)<=1/40` and the smallest
+upper rank `U` satisfying `P(B>=U)<=1/40`. Equality is accepted exactly. Integer
+binomial mass recurrence over denominator `denominator(p)^n` determines the ranks;
+probabilities above one half use exact reflection. Mathematical ranks are 1-based:
+finite endpoints are sorted values at indexes `L-1` and `U-1`, including duplicate
+observations. `L=0` and `U=n+1` have no finite observed bound and return null,
+independently for each endpoint (both null for an empty sample). The interval has
+at least 95% coverage for continuous populations, conservatively with ties. These
+order-statistic intervals do not replace the Type-7 percentile point estimates.
+
 Per-activity totals and per-realization counters distinguish starts, completions,
 cancellations, unfinished work and its reasons. Frequency metrics use starts. Truncated
 observations are labeled. Responses currently retain every instance and final inventory;
@@ -222,9 +261,8 @@ validation/error responses while keeping lossless JSON parsing in the adapters.
 The successful simulation payload is currently documented by this architecture and
 the reporting tests; it does not yet have a fully typed OpenAPI response model.
 
-Run the suite in Docker:
-docker compose exec -T backend python -m pytest tests -q -p no:cacheprovider
-
-The repository-local Python 3.12 environment is only a development fallback while
-Docker is unavailable; Docker verification is separately recorded in OVERNIGHT_REPORT.md.
-Neither host installation nor system-wide Python configuration is required.
+The primary developer/release path uses native Python 3.12 and Node/npm. With
+`PYTHONPATH` pointing to `backend` and `packaging/windows`, run
+`python -m pytest backend/tests packaging/windows/tests -q -p no:cacheprovider`.
+Portable Windows end users need none of those developer tools. Docker remains
+optional: `docker compose exec -T backend python -m pytest tests -q -p no:cacheprovider`.
