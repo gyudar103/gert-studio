@@ -12,6 +12,17 @@ npm, Git, Docker, WSL, or developer tools. Keep the control window open while us
 the app; use **Exit GERT Studio** to stop it.
 See [Windows distribution and build instructions](docs/WINDOWS_DISTRIBUTION.md).
 
+## Learn GERT Studio
+
+Choose **Learn / Tutorial** in the editor for the [complete tutorial](docs/TUTORIAL.md)
+and guided exercises using the real editor and simulator. Practice has its own
+workspace; **Return to my project** restores your original work. Only lesson
+progress and panel sizes are remembered locally. Export your project and practice
+networks before refreshing or closing.
+
+See [tutorial implementation and validation](docs/INTERACTIVE_TUTORIAL_REVIEW.md)
+for the source baseline, tested behavior, and Windows verification limits.
+
 ## Optional Docker startup
 
 Install Docker with a running Linux engine. From this repository:
