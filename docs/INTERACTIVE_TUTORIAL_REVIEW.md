@@ -5,11 +5,16 @@ website publication, and Windows release creation remain outside this change.
 
 The attached 19 October 2026 tutorial supplied the lesson text and standalone
 HTML design reference. Remote main was rechecked before implementation and still
-resolved to `52fcd732787d5829d923bf2178594de21704b2dc`; this is also local HEAD.
+resolved to `52fcd732787d5829d923bf2178594de21704b2dc`, the tutorial branch base.
 The remote annotated tag `v0.2.0` is
 `d13e15fa03058e0bd7be182ae83ee035fe04e716`, peeling to application source
 `e4d0b26b281803a520c0525fa8f62011b55219f2`, matching the attachment.
 The reviewed implementation is the dedicated tutorial branch diff against that main commit.
+The branch was committed and pushed as `a080adad788ed55a9df76c86df9424837201fad9`;
+[PR #3](https://github.com/gyudar103/gert-studio/pull/3) is open against main. The
+application and test evidence below covers that commit; the report-only follow-up
+records successful delivery. PR status was OPEN/CLEAN with no configured status
+checks, and remote main still pointed to the base commit above.
 
 **What changed**
 
@@ -185,13 +190,13 @@ Do not reuse a prior ZIP's acceptance result for these changed frontend bytes.
   remain skipped. These are release gates, not new source-merge blockers here.
 - Optional Docker image rebuild: not performed because Docker configuration and
   dependencies did not change; native development and production-host paths pass.
-- GitHub API/PR creation and live release-note/asset verification: the egress proxy
-  denies the CONNECT request to `api.github.com` with HTTP 403 before GitHub receives
-  it, even when the command runs outside the filesystem sandbox. Existing Git HTTPS
-  proxy access successfully verifies repository/main/tag refs. The missing
-  `api.github.com` network addition was saved to the environment draft; saving does
-  not activate it. Apply the network setting to unblock the API operation; no new
-  token has been requested or copied. Branch push is attempted independently.
+- Live REST release-note/asset verification: not completed. Earlier direct REST
+  probes received an HTTP 403 CONNECT/proxy denial, including the elevated probe.
+  This did not block the supported PR operation: `gh pr create` and `gh pr view`
+  succeeded using existing authentication, and the PR is verified open. No additional
+  user action or credential is needed for PR creation. The temporary network-draft
+  addition was removed after that success, restoring the original custom allowlist.
+  Remote repository/main/tag refs and the pushed branch were verified independently.
 - Main merge, website publication, Windows release creation and release workflows:
   intentionally not performed under the user's delivery scope.
 
