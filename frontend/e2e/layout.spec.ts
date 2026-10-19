@@ -11,7 +11,10 @@ async function drag(page:Page,name:string,x:number,y:number) {
 }
 
 test('all splitters drag, persist and reset without model/export/history changes',async({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'Load demo',exact:true}).click();
+  await page.goto('/');
+  // The portable host persists panel sizes across browser contexts and test runs.
+  await page.getByRole('button',{name:'Reset layout',exact:true}).click();
+  await page.getByRole('button',{name:'Load demo',exact:true}).click();
   const sidebar=page.getByRole('separator',{name:'Resize model sidebar'}),properties=page.getByRole('separator',{name:'Resize properties panel'}),analysis=page.getByRole('separator',{name:'Resize analysis panel'});
   await drag(page,'Resize model sidebar',50,0);await expect(sidebar).toHaveAttribute('aria-valuenow','295');
   await drag(page,'Resize properties panel',-40,0);await expect(properties).toHaveAttribute('aria-valuenow','390');

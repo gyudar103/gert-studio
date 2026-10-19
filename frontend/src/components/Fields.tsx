@@ -1,6 +1,6 @@
 import type {Item, Quantities} from '../types';
-export function Field({label,value,onChange,required=false,help}:{label:string;value:string;onChange:(value:string)=>void;required?:boolean;help?:string}) {
-  return <label className="field"><span>{label}{required && <span className="required"> *</span>}</span>
+export function Field({label,value,onChange,required=false,help,control}:{control?:string;label:string;value:string;onChange:(value:string)=>void;required?:boolean;help?:string}) {
+  return <label data-control={control} className="field"><span>{label}{required && <span className="required"> *</span>}</span>
     <input value={value} onChange={e=>onChange(e.target.value)} required={required} aria-required={required} spellCheck={false}/>{help && <small>{help}</small>}</label>;
 }
 export function SelectField({label,value,onChange,options,required=false}:{label:string;value:string;onChange:(value:string)=>void;options:{id:string;label:string}[];required?:boolean}) {
